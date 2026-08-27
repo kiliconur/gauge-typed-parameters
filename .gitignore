@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+
+# Project-local JDK used only for building (see README)
+jdk/
+
+# IDE
+.idea/
+*.iml
+out/
+
+# Local / machine specific
+local.properties
+build-log.txt
+*.log
+
+# Offline verification tool output
+tools/local-verification/.out/
+
+# IntelliJ Platform Gradle Plugin / Kotlin caches
+.intellijPlatform/
+.kotlin/

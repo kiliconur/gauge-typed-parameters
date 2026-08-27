@@ -1,0 +1,32 @@
+<idea-plugin>
+  <!-- id / name / description / version / idea-version are injected by
+       intellijPlatform.pluginConfiguration in build.gradle.kts (patchPluginXml). -->
+
+  <!-- Core platform + Java PSI (PsiMethod, PsiParameter, PsiEnumConstant). -->
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.java</depends>
+
+  <!-- REQUIRED dependency on the existing Gauge plugin.
+       Its jars are provided by the IDE at run time; nothing is bundled here. -->
+  <depends>com.thoughtworks.gauge</depends>
+
+  <resource-bundle>messages.GaugeTypedParametersBundle</resource-bundle>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <completion.contributor
+        language="Specification"
+        implementationClass="com.company.gauge.typed.completion.GaugeTypedParameterCompletionContributor"
+        order="first"/>
+
+    <localInspection
+        language="Specification"
+        implementationClass="com.company.gauge.typed.inspection.GaugeTypedParameterInspection"
+        bundle="messages.GaugeTypedParametersBundle"
+        key="inspection.typed.parameter.display.name"
+        groupBundle="messages.GaugeTypedParametersBundle"
+        groupKey="inspection.group.name"
+        shortName="GaugeTypedParameterValue"
+        enabledByDefault="true"
+        level="WARNING"/>
+  </extensions>
+</idea-plugin>

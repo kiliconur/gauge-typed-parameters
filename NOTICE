@@ -1,0 +1,52 @@
+Gauge Typed Parameters
+Copyright (c) 2026 Gauge Typed Parameters contributors
+
+This product is licensed under the MIT License (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-party components and provenance
+--------------------------------------------------------------------------------
+
+No substantial third-party source code is copied into this repository. The
+plugin calls IntelliJ Platform and Gauge plugin APIs at compile and run time;
+both are resolved as ordinary Gradle dependencies and neither is vendored,
+bundled, forked or patched. The produced plugin artifact
+(release/gauge-typed-parameters-1.0.0.zip) contains only this project's own
+classes and resources.
+
+Two items in this repository do originate elsewhere and are noted here for
+completeness:
+
+1. Gradle wrapper
+     gradlew
+     gradlew.bat
+     gradle/wrapper/gradle-wrapper.jar
+     gradle/wrapper/gradle-wrapper.properties
+
+   Part of Gradle, Copyright the original author or authors, licensed under the
+   Apache License, Version 2.0. The scripts retain their original Apache-2.0
+   headers and SPDX identifiers. Committing the wrapper is standard practice for
+   Gradle projects.
+
+       https://www.apache.org/licenses/LICENSE-2.0
+
+2. API stubs used by the offline verification tool
+     tools/local-verification/stubs/**
+     tools/local-verification/kstubs/**
+
+   These are hand-written, non-functional stub declarations (empty method
+   bodies) that mirror the public API signatures of classes from:
+
+     - IntelliJ IDEA Community  (JetBrains/intellij-community, Apache-2.0)
+     - the Gauge IntelliJ plugin (JetBrains/intellij-plugins, Apache-2.0)
+
+   They exist only so that this project's own logic can be type-checked and unit
+   tested without downloading a full IntelliJ Platform distribution. They contain
+   no implementation code from those projects. Both upstream projects are
+   licensed under the Apache License, Version 2.0.
+
+       https://github.com/JetBrains/intellij-community
+       https://github.com/JetBrains/intellij-plugins
+
+Gauge is a trademark of ThoughtWorks, Inc. IntelliJ IDEA is a trademark of
+JetBrains s.r.o. This project is not affiliated with or endorsed by either.

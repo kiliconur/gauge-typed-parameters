@@ -1,0 +1,37 @@
+<html>
+<body>
+Reports Gauge step parameter values that the resolved Java step implementation cannot accept.
+
+<p>
+  The step invocation is resolved to its <code>@Step</code>-annotated Java method, the placeholder
+  under the value is mapped to the matching method parameter, and the value is checked against that
+  parameter's type:
+</p>
+
+<ul>
+  <li><b>enum</b> - the value must be one of the declared constants. A quick fix offers the closest
+    matching constants.</li>
+  <li><b>boolean</b> / <b>Boolean</b> - only <code>true</code> and <code>false</code> are accepted.</li>
+  <li><b>numeric types</b> (<code>int</code>, <code>long</code>, <code>short</code>, <code>byte</code>,
+    <code>double</code>, <code>float</code>, their box types, <code>BigInteger</code>,
+    <code>BigDecimal</code>) - the value must parse as a number.</li>
+</ul>
+
+<p>Example of a reported problem:</p>
+<pre><code>
+enum Element { LOGIN_BUTTON, LOGOUT_BUTTON }
+
+@Step("&lt;element&gt; elementine tiklanir")
+public void click(Element element) { }
+</code></pre>
+<pre><code>
+* "LOGNI_BUTTON" elementine tiklanir     &lt;- Unknown Element value 'LOGNI_BUTTON'
+</code></pre>
+
+<p>
+  Nothing is reported while the project is indexing, when the step implementation cannot be
+  resolved, when it resolves ambiguously, when the number of Gauge parameters does not match the
+  number of Java parameters, or for any other parameter type (including <code>String</code>).
+</p>
+</body>
+</html>
