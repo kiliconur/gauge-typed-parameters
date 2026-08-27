@@ -1,5 +1,6 @@
 package com.company.gauge.typed.gauge
 
+import com.company.gauge.typed.GtpLog
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import com.thoughtworks.gauge.language.psi.SpecArg
@@ -40,19 +41,38 @@ data class GaugeParameterContext(
             caretOffset: Int,
             allowOutsideQuotes: Boolean,
         ): GaugeParameterContext? {
-            val step = GaugeStepAdapter.findStep(element) ?: return null
+            val step = GaugeStepAdapter.findStep(element)
+            if (step == null) {
+                GtpLog.info("3. SpecStep NOT found for caret element - not inside a step")
+                return null
+            }
+            GtpLog.info("3. SpecStep found: '${GaugeStepAdapter.normalize(step.text)}'")
+
             val arg = PsiTreeUtil.getParentOfType(element, SpecArg::class.java, false)
 
             val insideQuotes: Boolean
             when {
                 arg != null -> {
-                    // Never offer typed values for `<dynamic>` parameters - those are table columns.
-                    if (!GaugeStepAdapter.isStaticArg(arg)) return null
+                    if (!GaugeStepAdapter.isStaticArg(arg)) {
+                        GtpLog.info("4. SpecArg found but it is a <dynamic> arg - not completable")
+                        return null
+                    }
+                    GtpLog.info("4. SpecStaticArg found: value='${GaugeStepAdapter.staticArgValue(arg)}'")
                     insideQuotes = true
                 }
 
-                allowOutsideQuotes && GaugeStepAdapter.isStepTextToken(element) -> insideQuotes = false
-                else -> return null
+                allowOutsideQuotes && GaugeStepAdapter.isStepTextToken(element) -> {
+                    GtpLog.info("4. no SpecArg - caret is in plain step text (auto-quote path)")
+                    insideQuotes = false
+                }
+
+                else -> {
+                    GtpLog.info(
+                        "4. no SpecArg and not a STEP text token" +
+                            " (elementType=${element.node?.elementType}) - not completable",
+                    )
+                    return null
+                }
             }
 
             val template = GaugeStepAdapter.buildTemplate(
@@ -61,7 +81,18 @@ data class GaugeParameterContext(
                 caretOffset = caretOffset,
                 treatCaretWordAsParameter = !insideQuotes,
             )
-            if (template.caretPlaceholderIndex < 0) return null
+            if (template.caretPlaceholderIndex < 0) {
+                GtpLog.info(
+                    "5. placeholder index NOT determined | template='${template.text}'" +
+                        " | placeholders=${template.placeholderCount}",
+                )
+                return null
+            }
+            GtpLog.info(
+                "5. placeholder index=${template.caretPlaceholderIndex}" +
+                    " of ${template.placeholderCount} | template='${template.text}'" +
+                    " | prefix='${template.caretPrefix.orEmpty()}'",
+            )
 
             return GaugeParameterContext(
                 step = step,

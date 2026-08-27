@@ -1,5 +1,6 @@
 package com.company.gauge.typed.gauge
 
+import com.company.gauge.typed.GtpLog
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
@@ -49,14 +50,44 @@ class GaugeStepResolver(private val project: Project) {
         template: GaugeStepAdapter.StepTemplate,
         useGaugeReference: Boolean = true,
     ): PsiMethod? {
-        if (project.isDisposed || DumbService.isDumb(project)) return null
+        if (project.isDisposed || DumbService.isDumb(project)) {
+            GtpLog.info("6. resolution skipped: project disposed or indexing")
+            return null
+        }
 
         if (useGaugeReference) {
-            gaugeReference(step)?.let { return it }
+            val viaGauge = gaugeReference(step)
+            if (viaGauge != null) {
+                GtpLog.info("6. resolved via Gauge StepReference -> ${describe(viaGauge)}")
+                return viaGauge
+            }
+            GtpLog.info("6a. Gauge StepReference returned nothing - falling back to @Step index")
         }
-        val candidates = templateIndex(step)[template.text] ?: return null
-        return candidates.singleOrNull()
+
+        val index = templateIndex(step)
+        val candidates = index[template.text]
+        if (candidates == null) {
+            GtpLog.info(
+                "6. NOT resolved: no @Step matches template '${template.text}'" +
+                    " | index holds ${index.size} template(s)" +
+                    " | sample=${index.keys.take(5)}",
+            )
+            return null
+        }
+        if (candidates.size > 1) {
+            GtpLog.info(
+                "6. NOT resolved: ambiguous, ${candidates.size} methods match" +
+                    " '${template.text}': ${candidates.map { describe(it) }}",
+            )
+            return null
+        }
+        GtpLog.info("6. resolved via @Step index -> ${describe(candidates[0])}")
+        return candidates[0]
     }
+
+    private fun describe(method: PsiMethod): String =
+        "${method.containingClass?.qualifiedName}#${method.name}(" +
+            method.parameterList.parameters.joinToString { it.type.presentableText } + ")"
 
     /** Delegates to the Gauge plugin's own step -> implementation resolution. */
     private fun gaugeReference(step: SpecStep): PsiMethod? = try {
@@ -69,7 +100,7 @@ class GaugeStepResolver(private val project: Project) {
         throw e
     } catch (e: Throwable) {
         // Gauge's resolution reaches out to the Gauge daemon; never let that break completion.
-        LOG.debug("Gauge step reference resolution failed", e)
+        GtpLog.info("6a. Gauge StepReference threw ${e.javaClass.simpleName}: ${e.message}")
         null
     }
 
@@ -112,13 +143,21 @@ class GaugeStepResolver(private val project: Project) {
         val annotationClass = facade.findClass(
             GaugeStepAdapter.STEP_ANNOTATION_FQN,
             GlobalSearchScope.allScope(project),
-        ) ?: return emptyMap()
+        )
+        if (annotationClass == null) {
+            GtpLog.info(
+                "6b. index EMPTY: ${GaugeStepAdapter.STEP_ANNOTATION_FQN} not on the project" +
+                    " classpath - add the gauge-java dependency to the module",
+            )
+            return emptyMap()
+        }
 
         val scope = when {
             module != null && !module.isDisposed ->
                 GlobalSearchScope.moduleWithDependenciesAndLibrariesScope(module, true)
             else -> GlobalSearchScope.projectScope(project)
         }
+        GtpLog.info("6b. building @Step index | module=${module?.name ?: "<none, using project scope>"}")
 
         val result = LinkedHashMap<String, MutableList<PsiMethod>>()
         val methods = try {
@@ -143,6 +182,7 @@ class GaugeStepResolver(private val project: Project) {
                 if (bucket.none { it == method }) bucket.add(method)
             }
         }
+        GtpLog.info("6b. @Step index built: ${methods.size} annotated method(s) -> ${result.size} template(s)")
         return result
     }
 
