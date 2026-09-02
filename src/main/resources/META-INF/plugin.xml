@@ -13,13 +13,22 @@
   <resource-bundle>messages.GaugeTypedParametersBundle</resource-bundle>
 
   <extensions defaultExtensionNs="com.intellij">
+    <!-- Both Gauge languages, exactly as the Gauge plugin registers them itself:
+         "Specification" for .spec files and "Concept" for .cpt files. -->
     <completion.contributor
         language="Specification"
         implementationClass="com.company.gauge.typed.completion.GaugeTypedParameterCompletionContributor"
         order="first"/>
 
+    <completion.contributor
+        language="Concept"
+        implementationClass="com.company.gauge.typed.completion.GaugeTypedParameterCompletionContributor"
+        order="first"/>
+
+    <!-- One inspection for both languages: registering it twice would show two identical
+         entries in Settings | Inspections. It bails out on the first line of buildVisitor for
+         any file that is not Gauge PSI. -->
     <localInspection
-        language="Specification"
         implementationClass="com.company.gauge.typed.inspection.GaugeTypedParameterInspection"
         bundle="messages.GaugeTypedParametersBundle"
         key="inspection.typed.parameter.display.name"

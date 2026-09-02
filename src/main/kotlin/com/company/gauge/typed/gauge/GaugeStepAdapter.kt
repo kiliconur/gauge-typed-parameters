@@ -2,19 +2,17 @@ package com.company.gauge.typed.gauge
 
 import com.intellij.codeInsight.completion.CompletionUtilCore
 import com.intellij.psi.PsiElement
-import com.intellij.psi.util.PsiTreeUtil
-import com.thoughtworks.gauge.language.psi.SpecArg
-import com.thoughtworks.gauge.language.psi.SpecStep
-import com.thoughtworks.gauge.language.psi.SpecTable
-import com.thoughtworks.gauge.language.token.SpecTokenTypes
 
 /**
- * The single place in this plugin that knows about Gauge's own PSI classes
- * ([SpecStep], [SpecArg], [SpecTokenTypes], ...).
+ * The single place in this plugin that knows about Gauge's own PSI
+ * (through [GaugeDialect], which holds the `Spec*` and `Concept*` classes and token types).
  *
- * Everything above this layer works with plain IntelliJ PSI plus the small value
- * objects declared here, so that a future incompatible change in the Gauge plugin
- * only has to be absorbed in this file (and in [GaugeStepResolver]).
+ * Everything above this layer works with plain IntelliJ PSI plus the small value objects
+ * declared here, so that a future incompatible change in the Gauge plugin only has to be
+ * absorbed in these two files (and in [GaugeStepResolver]).
+ *
+ * Every function accepts a step / parameter from either dialect: `.spec` and `.cpt` share
+ * one pipeline.
  */
 object GaugeStepAdapter {
 
@@ -22,9 +20,8 @@ object GaugeStepAdapter {
     const val STEP_ANNOTATION_FQN: String = "com.thoughtworks.gauge.Step"
 
     /**
-     * Canonical placeholder used to compare a spec step invocation with a
-     * `@Step("...")` annotation value. Matches the shape Gauge itself uses for
-     * `StepValue.getStepText()`.
+     * Canonical placeholder used to compare a step invocation with a `@Step("...")` annotation
+     * value. Matches the shape Gauge itself uses for `StepValue.getStepText()`.
      */
     const val PLACEHOLDER: String = "{}"
 
@@ -48,38 +45,37 @@ object GaugeStepAdapter {
         val caretPrefix: String? = null,
     )
 
-    /** The nearest enclosing Gauge spec step, or `null` when [element] is not inside one. */
-    fun findStep(element: PsiElement): SpecStep? =
-        PsiTreeUtil.getParentOfType(element, SpecStep::class.java, false)
+    /** The nearest enclosing Gauge step (`.spec` or `.cpt`), or `null`. */
+    fun findStep(element: PsiElement): PsiElement? = GaugeDialect.of(element)?.findStep(element)
 
     /** All Gauge parameters of [step], static and dynamic, in source order. */
-    fun argsOf(step: SpecStep): List<SpecArg> = step.argList ?: emptyList()
+    fun argsOf(step: PsiElement): List<PsiElement> =
+        GaugeDialect.ofStep(step)?.argsOf(step) ?: emptyList()
 
     /** True when [arg] is a quoted static parameter (`"value"`), false for `<dynamic>` ones. */
-    fun isStaticArg(arg: SpecArg): Boolean = arg.staticArg != null
+    fun isStaticArg(arg: PsiElement): Boolean =
+        GaugeDialect.of(arg)?.staticArgOf(arg) != null
 
     /**
      * The `ARG` token that carries the raw text between the quotes of a static parameter.
      *
-     * Returns `null` for `""` (Gauge's grammar makes the token optional) and for
-     * dynamic parameters.
+     * Returns `null` for `""` (Gauge's grammar makes the token optional) and for dynamic
+     * parameters.
      */
-    fun staticArgValueLeaf(arg: SpecArg): PsiElement? {
-        val staticArg = arg.staticArg ?: return null
-        return staticArg.node?.findChildByType(SpecTokenTypes.ARG)?.psi
+    fun staticArgValueLeaf(arg: PsiElement): PsiElement? {
+        val dialect = GaugeDialect.of(arg) ?: return null
+        val staticArg = dialect.staticArgOf(arg) ?: return null
+        return staticArg.node?.findChildByType(dialect.argToken)?.psi
     }
 
     /** Raw text of a static parameter, without the surrounding quotes. */
-    fun staticArgValue(arg: SpecArg): String = staticArgValueLeaf(arg)?.text ?: ""
-
-    /** True when [element] is the `ARG` token of a static parameter. */
-    fun isArgValueToken(element: PsiElement): Boolean =
-        element.node?.elementType == SpecTokenTypes.ARG &&
-            PsiTreeUtil.getParentOfType(element, SpecArg::class.java, false) != null
+    fun staticArgValue(arg: PsiElement): String = staticArgValueLeaf(arg)?.text ?: ""
 
     /** True when [element] is a plain text token of a step (i.e. outside any parameter). */
-    fun isStepTextToken(element: PsiElement): Boolean =
-        element.node?.elementType == SpecTokenTypes.STEP && element.firstChild == null
+    fun isStepTextToken(element: PsiElement): Boolean {
+        val dialect = GaugeDialect.of(element) ?: return false
+        return element.node?.elementType == dialect.stepTextToken && element.firstChild == null
+    }
 
     /**
      * Builds the parameterised template of [step].
@@ -96,11 +92,14 @@ object GaugeStepAdapter {
      *        This powers the optional "auto quote" completion.
      */
     fun buildTemplate(
-        step: SpecStep,
+        step: PsiElement,
         caretElement: PsiElement? = null,
         caretOffset: Int = -1,
         treatCaretWordAsParameter: Boolean = false,
     ): StepTemplate {
+        val dialect = GaugeDialect.ofStep(step) ?: GaugeDialect.of(step)
+            ?: return StepTemplate("", 0, -1)
+
         val sb = StringBuilder()
         var count = 0
         var caretIndex = -1
@@ -112,7 +111,7 @@ object GaugeStepAdapter {
             next = child.nextSibling
             val type = child.node?.elementType
 
-            if (child is SpecArg) {
+            if (dialect.isArg(child)) {
                 if (ownsCaret(child, caretElement)) {
                     caretIndex = count
                     caretPrefix = argPrefix(child, caretOffset)
@@ -122,19 +121,17 @@ object GaugeStepAdapter {
                 continue
             }
 
-            if (child is SpecTable) {
+            if (dialect.isTable(child)) {
                 // An inline table is passed to the implementation as a trailing parameter.
                 sb.append(' ').append(PLACEHOLDER)
                 count++
                 continue
             }
 
-            when (type) {
-                SpecTokenTypes.STEP_IDENTIFIER, SpecTokenTypes.COMMENT -> continue
-                SpecTokenTypes.NEW_LINE -> {
-                    sb.append(' ')
-                    continue
-                }
+            if (type == dialect.stepIdentifierToken || type == dialect.commentToken) continue
+            if (type == dialect.newLineToken) {
+                sb.append(' ')
+                continue
             }
 
             val word = if (treatCaretWordAsParameter && caretIndex < 0 && ownsCaret(child, caretElement)) {
@@ -157,8 +154,15 @@ object GaugeStepAdapter {
     }
 
     /** True when [caretElement] is [child] itself or lives inside it. */
-    private fun ownsCaret(child: PsiElement, caretElement: PsiElement?): Boolean =
-        caretElement != null && PsiTreeUtil.isAncestor(child, caretElement, false)
+    private fun ownsCaret(child: PsiElement, caretElement: PsiElement?): Boolean {
+        if (caretElement == null) return false
+        var current: PsiElement? = caretElement
+        while (current != null) {
+            if (current === child) return true
+            current = current.parent
+        }
+        return false
+    }
 
     /** Converts a `@Step` annotation value into the same canonical template form. */
     fun templateFromAnnotationValue(value: String): StepTemplate {
@@ -168,7 +172,7 @@ object GaugeStepAdapter {
     }
 
     /** Text of a static parameter from its opening quote up to [caretOffset]. */
-    private fun argPrefix(arg: SpecArg, caretOffset: Int): String {
+    private fun argPrefix(arg: PsiElement, caretOffset: Int): String {
         val leaf = staticArgValueLeaf(arg) ?: return ""
         val local = caretOffset - leaf.textRange.startOffset
         if (local <= 0) return ""

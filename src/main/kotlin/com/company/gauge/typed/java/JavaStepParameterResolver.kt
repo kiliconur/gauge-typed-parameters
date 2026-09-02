@@ -18,6 +18,13 @@ import com.intellij.psi.PsiType
 object JavaStepParameterResolver {
 
     /**
+     * The raw base class used as the "browse every project enum" signal. A parameter declared
+     * as exactly this type is [GaugeParameterKind.GenericEnumKind]; a parameter declared as a
+     * concrete enum stays [GaugeParameterKind.SpecificEnumKind].
+     */
+    const val GENERIC_ENUM_FQN: String = "java.lang.Enum"
+
+    /**
      * @param placeholderIndex 0-based index of the parameter under the caret
      * @param placeholderCount number of Gauge parameters in the invocation
      * @return the matching parameter, or `null` when the mapping is not certain
@@ -45,7 +52,11 @@ object JavaStepParameterResolver {
         val classType = type as? PsiClassType ?: return GaugeParameterKind.UnsupportedKind
         val psiClass = classType.resolve() ?: return GaugeParameterKind.UnsupportedKind
 
-        if (psiClass.isEnum) return GaugeParameterKind.EnumKind(psiClass)
+        // `Enum` itself is not an enum (Enum.isEnum() is false), but check it first anyway so
+        // that no future platform change can make a generic parameter look like a specific one.
+        if (psiClass.qualifiedName == GENERIC_ENUM_FQN) return GaugeParameterKind.GenericEnumKind
+
+        if (psiClass.isEnum) return GaugeParameterKind.SpecificEnumKind(psiClass)
 
         return when (psiClass.qualifiedName) {
             "java.lang.Boolean" -> GaugeParameterKind.BooleanKind

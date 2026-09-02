@@ -40,13 +40,17 @@ object GaugeValueValidator {
 
     /** @return the violation, or `null` when [value] is acceptable (or cannot be judged). */
     fun validate(kind: GaugeParameterKind, value: String): Violation? = when (kind) {
-        is GaugeParameterKind.EnumKind -> validateEnum(kind, value)
+        is GaugeParameterKind.SpecificEnumKind -> validateEnum(kind, value)
         GaugeParameterKind.BooleanKind -> validateBoolean(value)
         is GaugeParameterKind.NumericKind -> validateNumeric(kind, value)
+        // A `java.lang.Enum` parameter accepts a constant of ANY project enum, so there is no
+        // single legal set of values to validate against - staying silent is the only correct
+        // behaviour, and it also keeps intermediate text like "PageItems2." unmarked.
+        GaugeParameterKind.GenericEnumKind -> null
         GaugeParameterKind.StringKind, GaugeParameterKind.UnsupportedKind -> null
     }
 
-    private fun validateEnum(kind: GaugeParameterKind.EnumKind, value: String): Violation? {
+    private fun validateEnum(kind: GaugeParameterKind.SpecificEnumKind, value: String): Violation? {
         val constants = kind.constantNames
         // An enum with no readable constants means incomplete PSI - stay silent.
         if (constants.isEmpty() || value in constants) return null

@@ -1,14 +1,14 @@
 # Unpacked distribution
 
 This folder holds the **exact, unmodified contents** of
-[`../release/gauge-typed-parameters-1.0.0.zip`](../release/gauge-typed-parameters-1.0.0.zip),
+[`../release/gauge-typed-parameters-1.1.0.zip`](../release/gauge-typed-parameters-1.1.0.zip),
 extracted with the directory structure preserved:
 
 ```
 release-unpacked/
 └── gauge-typed-parameters/
     └── lib/
-        └── gauge-typed-parameters-1.0.0.jar
+        └── gauge-typed-parameters-1.1.0.jar
 ```
 
 The jar is byte-for-byte the one produced by `gradlew buildPlugin`:
@@ -29,7 +29,7 @@ Nothing here was recompiled, repacked or otherwise touched.
 4. Rename the result to:
 
    ```
-   gauge-typed-parameters-1.0.0.zip
+   gauge-typed-parameters-1.1.0.zip
    ```
 
 ### Why step 2 matters
@@ -38,10 +38,10 @@ An IntelliJ plugin ZIP must have the plugin directory at its **root**. The archi
 look exactly like this:
 
 ```
-gauge-typed-parameters-1.0.0.zip
+gauge-typed-parameters-1.1.0.zip
 └── gauge-typed-parameters/
     └── lib/
-        └── gauge-typed-parameters-1.0.0.jar
+        └── gauge-typed-parameters-1.1.0.jar
 ```
 
 If you compress the outer folder instead, you get an extra `release-unpacked/` level at the
@@ -54,7 +54,7 @@ Open the new ZIP and confirm the first entry is the `gauge-typed-parameters` fol
 
 ```powershell
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::OpenRead("gauge-typed-parameters-1.0.0.zip").Entries |
+[IO.Compression.ZipFile]::OpenRead("gauge-typed-parameters-1.1.0.zip").Entries |
     Select-Object FullName, Length
 ```
 
@@ -69,7 +69,7 @@ uses, so you can copy the `gauge-typed-parameters` folder straight into IntelliJ
 plugins directory and restart:
 
 ```
-%APPDATA%\JetBrains\IntelliJIdea2026.2\plugins\gauge-typed-parameters\lib\gauge-typed-parameters-1.0.0.jar
+%APPDATA%\JetBrains\IntelliJIdea2026.2\plugins\gauge-typed-parameters\lib\gauge-typed-parameters-1.1.0.jar
 ```
 
 The supported route remains **Settings → Plugins → gear icon → Install Plugin from Disk…**

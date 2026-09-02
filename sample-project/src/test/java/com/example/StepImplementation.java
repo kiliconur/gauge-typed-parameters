@@ -27,4 +27,14 @@ public class StepImplementation {
     @Step("<text> yazilir")
     public void type(String text) {
     }
+
+    /**
+     * Declaring the parameter as the raw java.lang.Enum is an intentional signal: completion
+     * first offers the project's enum CLASS names, and after typing a dot the constants of that
+     * class. Only the constant is written to the .spec file, and this method resolves which
+     * enum it belongs to at run time.
+     */
+    @Step("<item> menusune git")
+    public void goToMenu(Enum item) {
+    }
 }

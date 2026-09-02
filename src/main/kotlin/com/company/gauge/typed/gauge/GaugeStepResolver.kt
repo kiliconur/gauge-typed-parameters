@@ -20,15 +20,17 @@ import com.intellij.psi.search.searches.AnnotatedElementsSearch
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiModificationTracker
-import com.thoughtworks.gauge.language.psi.SpecStep
 import com.thoughtworks.gauge.util.StepUtil
 
 /**
- * Resolves a Gauge step invocation to the Java `@Step`-annotated method that implements it.
+ * Resolves a Gauge step invocation - from a `.spec` or from a `.cpt` file - to the Java
+ * `@Step`-annotated method that implements it.
  *
  * Two strategies, in order:
  *
- *  1. Gauge's own [com.thoughtworks.gauge.reference.StepReference]. In a configured Gauge
+ *  1. Gauge's own reference on the step element: `StepReference` for `SpecStep`,
+ *     `ConceptReference` for `ConceptStep` (which wraps the concept step's AST node in a
+ *     `SpecStepImpl` and calls the very same `StepUtil.findStepImpl`). In a configured Gauge
  *     project this is authoritative - it goes through the Gauge daemon's step parser and
  *     Gauge's reference cache, exactly like "Go to step implementation" does.
  *  2. A PSI-only fallback that matches the canonical template of the invocation against the
@@ -46,7 +48,7 @@ class GaugeStepResolver(private val project: Project) {
      * @return the implementing method, or `null` when it cannot be resolved unambiguously.
      */
     fun resolveImplementation(
-        step: SpecStep,
+        step: PsiElement,
         template: GaugeStepAdapter.StepTemplate,
         useGaugeReference: Boolean = true,
     ): PsiMethod? {
@@ -58,7 +60,8 @@ class GaugeStepResolver(private val project: Project) {
         if (useGaugeReference) {
             val viaGauge = gaugeReference(step)
             if (viaGauge != null) {
-                GtpLog.info("6. resolved via Gauge StepReference -> ${describe(viaGauge)}")
+                val dialect = GaugeDialect.ofStep(step)?.id ?: "?"
+                GtpLog.info("6. resolved via Gauge reference ($dialect) -> ${describe(viaGauge)}")
                 return viaGauge
             }
             GtpLog.info("6a. Gauge StepReference returned nothing - falling back to @Step index")
@@ -90,7 +93,7 @@ class GaugeStepResolver(private val project: Project) {
             method.parameterList.parameters.joinToString { it.type.presentableText } + ")"
 
     /** Delegates to the Gauge plugin's own step -> implementation resolution. */
-    private fun gaugeReference(step: SpecStep): PsiMethod? = try {
+    private fun gaugeReference(step: PsiElement): PsiMethod? = try {
         val physical = originalOf(step)
         physical?.reference?.resolve() as? PsiMethod
     } catch (e: IndexNotReadyException) {
@@ -108,7 +111,7 @@ class GaugeStepResolver(private val project: Project) {
      * During completion the PSI we are handed belongs to a non-physical copy of the file that
      * has the dummy identifier injected. Gauge's reference only works on the real file.
      */
-    private fun originalOf(step: SpecStep): SpecStep? {
+    private fun originalOf(step: PsiElement): PsiElement? {
         val file = step.containingFile ?: return null
         val original = file.originalFile
         if (original === file) return step

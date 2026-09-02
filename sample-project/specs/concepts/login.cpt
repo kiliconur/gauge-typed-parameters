@@ -1,0 +1,9 @@
+# Kullanici <username> ile giris yapar
+
+The same completion works in concept files. Put the caret inside any quoted
+parameter below and press Ctrl+Space.
+
+* "LOGIN_BUTTON" elementine tiklanir
+* "CHROME" ile "USERNAME_INPUT" elementine tiklanir
+* "true" aktif edilir
+* "LOGIN_BUTTON" menusune git

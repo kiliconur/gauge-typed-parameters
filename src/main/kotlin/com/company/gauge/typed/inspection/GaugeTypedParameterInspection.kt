@@ -15,10 +15,10 @@ import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
-import com.thoughtworks.gauge.language.psi.SpecStep
+import com.company.gauge.typed.gauge.GaugeDialect
 
 /**
- * Flags Gauge step parameter values that the resolved Java step implementation could never
+ * Flags Gauge step parameter values in `.spec` and `.cpt` files that the resolved Java step implementation could never
  * accept: an unknown enum constant, a non-boolean for a `boolean` parameter, a non-number
  * for a numeric parameter.
  *
@@ -34,10 +34,14 @@ class GaugeTypedParameterInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         val project = holder.project
         if (project.isDisposed || DumbService.isDumb(project)) return PsiElementVisitor.EMPTY_VISITOR
+        // Registered without a language attribute so that one settings entry covers both Gauge
+        // languages; every other file type is dismissed right here.
+        if (GaugeDialect.of(holder.file) == null) return PsiElementVisitor.EMPTY_VISITOR
 
         return object : PsiElementVisitor() {
             override fun visitElement(element: PsiElement) {
-                if (element !is SpecStep) return
+                // Both dialects: SpecStep in .spec files, ConceptStep in .cpt files.
+                if (!GaugeDialect.isStepElement(element)) return
                 try {
                     inspectStep(element, holder)
                 } catch (e: ProcessCanceledException) {
@@ -51,7 +55,7 @@ class GaugeTypedParameterInspection : LocalInspectionTool() {
         }
     }
 
-    private fun inspectStep(step: SpecStep, holder: ProblemsHolder) {
+    private fun inspectStep(step: PsiElement, holder: ProblemsHolder) {
         val args = GaugeStepAdapter.argsOf(step)
         if (args.isEmpty()) return
 

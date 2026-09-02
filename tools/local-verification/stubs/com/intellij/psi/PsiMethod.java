@@ -1,2 +1,5 @@
 package com.intellij.psi;
-public interface PsiMethod extends PsiNamedElement { PsiParameterList getParameterList(); }
+public interface PsiMethod extends PsiNamedElement {
+  PsiParameterList getParameterList();
+  PsiClass getContainingClass();
+}

@@ -140,6 +140,48 @@ class GaugeTypedParameterInspectionTest : GaugeTypedParametersTestCase() {
         assertEmpty(pluginProblems())
     }
 
+    // A java.lang.Enum parameter has no single legal value set - nothing may be flagged,
+    // not even the intermediate text the enum browser leaves behind while typing.
+    fun testGenericEnumParameterIsNeverHighlighted() {
+        addProjectEnums()
+        addStepImplementation(
+            """
+                @Step("<item> menusune git")
+                public void goToMenu(Enum item) {}
+            """,
+        )
+        myFixture.configureByText(
+            "t.spec",
+            spec(
+                """* "LOGIN_BUTTON" menusune git""",
+                """* "PageItems2." menusune git""",
+                """* "PageItems2.LO" menusune git""",
+                """* "SOMETHING_ELSE" menusune git""",
+            ),
+        )
+
+        assertEmpty(pluginProblems())
+    }
+
+    // The concept file path goes through the very same inspection.
+    fun testInvalidEnumValueIsHighlightedInConceptFiles() {
+        addElementEnum()
+        addClickStep()
+        myFixture.configureByText("login.cpt", concept("""* "LOGNI_BUTTON" elementine tiklanir"""))
+
+        val problems = pluginProblems()
+        assertSize(1, problems)
+        assertTrue(problems.first(), problems.first().contains("Unknown Element value 'LOGNI_BUTTON'"))
+    }
+
+    fun testValidEnumValueIsNotHighlightedInConceptFiles() {
+        addElementEnum()
+        addClickStep()
+        myFixture.configureByText("login.cpt", concept("""* "LOGIN_BUTTON" elementine tiklanir"""))
+
+        assertEmpty(pluginProblems())
+    }
+
     private fun addClickStep() {
         addStepImplementation(
             """

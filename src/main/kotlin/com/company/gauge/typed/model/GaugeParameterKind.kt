@@ -12,8 +12,11 @@ import com.intellij.psi.PsiEnumConstant
  */
 sealed interface GaugeParameterKind {
 
-    /** A Java enum. [constantNames] are the declared constants in declaration order. */
-    data class EnumKind(val psiClass: PsiClass) : GaugeParameterKind {
+    /**
+     * A concrete Java enum such as `PageItems`. [constantNames] are the declared constants in
+     * declaration order - they are offered directly, with no class-name browsing step.
+     */
+    data class SpecificEnumKind(val psiClass: PsiClass) : GaugeParameterKind {
         val typeName: String get() = psiClass.name ?: psiClass.qualifiedName ?: "enum"
 
         /**
@@ -24,6 +27,14 @@ sealed interface GaugeParameterKind {
             psiClass.fields.filterIsInstance<PsiEnumConstant>().mapNotNull { it.name }
         }
     }
+
+    /**
+     * The parameter is declared as exactly `java.lang.Enum` - the raw base class, never a
+     * concrete enum. That is an intentional signal from the step implementation: "any project
+     * enum constant is acceptable here", which switches completion to the two-stage project
+     * enum browser (enum class names first, then that class's constants).
+     */
+    data object GenericEnumKind : GaugeParameterKind
 
     /** `boolean` or `java.lang.Boolean`. */
     data object BooleanKind : GaugeParameterKind
@@ -38,9 +49,14 @@ sealed interface GaugeParameterKind {
     data object UnsupportedKind : GaugeParameterKind
 
     companion object {
-        /** Values the plugin can offer as completion for this kind, empty when it cannot. */
+        /**
+         * Values the plugin can offer as completion for this kind without any further context,
+         * empty when it cannot. [GenericEnumKind] deliberately yields nothing here: its
+         * candidates depend on the project index and on what has been typed so far, and are
+         * produced by [com.company.gauge.typed.enums.GenericEnumBrowser].
+         */
         fun completionValues(kind: GaugeParameterKind): List<String> = when (kind) {
-            is EnumKind -> kind.constantNames
+            is SpecificEnumKind -> kind.constantNames
             BooleanKind -> listOf("true", "false")
             else -> emptyList()
         }

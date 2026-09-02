@@ -4,7 +4,14 @@ package localchecks
 
 import com.company.gauge.typed.completion.BooleanCompletionProvider
 import com.company.gauge.typed.completion.EnumCompletionProvider
+import com.company.gauge.typed.completion.GaugeQualifiedValuePrefixMatcher
 import com.company.gauge.typed.completion.GaugeValuePrefixMatcher
+import com.company.gauge.typed.enums.EnumClassCatalog
+import com.company.gauge.typed.enums.EnumClassLookup
+import com.company.gauge.typed.enums.EnumClassResolver
+import com.company.gauge.typed.enums.GenericEnumBrowser
+import com.company.gauge.typed.enums.GenericEnumCandidates
+import com.company.gauge.typed.enums.GenericEnumStage
 import com.company.gauge.typed.gauge.GaugeStepAdapter
 import com.company.gauge.typed.java.JavaStepParameterResolver
 import com.company.gauge.typed.model.GaugeParameterKind
@@ -133,8 +140,8 @@ private fun typeClassification() {
     )
 
     val enumKind = JavaStepParameterResolver.kindOf(FakeClassType(elementEnum))
-    check("enum is recognised", enumKind is GaugeParameterKind.EnumKind)
-    eq("enum type name", "Element", (enumKind as GaugeParameterKind.EnumKind).typeName)
+    check("enum is recognised", enumKind is GaugeParameterKind.SpecificEnumKind)
+    eq("enum type name", "Element", (enumKind as GaugeParameterKind.SpecificEnumKind).typeName)
     eq(
         "enum constants",
         listOf("LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON"),
@@ -173,7 +180,7 @@ private fun typeClassification() {
 private fun completionValues() {
     println("\n[completion candidates per kind]")
     val elementEnum = FakeClass("Element", "com.example.Element", true, listOf("LOGIN_BUTTON", "LOGOUT_BUTTON"))
-    val enumKind = GaugeParameterKind.EnumKind(elementEnum)
+    val enumKind = GaugeParameterKind.SpecificEnumKind(elementEnum)
 
     val enumProvider = EnumCompletionProvider()
     check("enum provider supports enums", enumProvider.supports(enumKind))
@@ -228,7 +235,7 @@ private fun prefixMatching() {
 
 private fun validation() {
     println("\n[value validation]")
-    val elementEnum = GaugeParameterKind.EnumKind(
+    val elementEnum = GaugeParameterKind.SpecificEnumKind(
         FakeClass("Element", "com.example.Element", true, listOf("LOGIN_BUTTON", "LOGOUT_BUTTON")),
     )
     check("valid enum constant", GaugeValueValidator.validate(elementEnum, "LOGIN_BUTTON") == null)
@@ -244,7 +251,7 @@ private fun validation() {
     check("nonsense is reported", nonsense is Violation.UnknownEnumConstant)
     eq("nonsense gets no suggestion", emptyList(), nonsense!!.suggestions)
 
-    val emptyEnum = GaugeParameterKind.EnumKind(FakeClass("E", "com.example.E", true, emptyList()))
+    val emptyEnum = GaugeParameterKind.SpecificEnumKind(FakeClass("E", "com.example.E", true, emptyList()))
     check("enum without readable constants stays silent", GaugeValueValidator.validate(emptyEnum, "X") == null)
 
     check("true is valid", GaugeValueValidator.validate(GaugeParameterKind.BooleanKind, "true") == null)
@@ -272,6 +279,138 @@ private fun validation() {
     eq("levenshtein against empty", 3, GaugeValueValidator.editDistance("", "ABC"))
 }
 
+
+// ------------------------------------------------- generic java.lang.Enum browser
+
+private class CountingCatalog(private val classes: List<PsiClass>) : EnumClassCatalog {
+    var calls = 0
+    override fun enumClasses(context: PsiElement): List<PsiClass> {
+        calls++
+        return classes
+    }
+}
+
+private class CountingResolver(private val byName: Map<String, EnumClassLookup>) : EnumClassResolver {
+    var calls = 0
+    val names = ArrayList<String>()
+    override fun resolve(context: PsiElement, name: String): EnumClassLookup {
+        calls++
+        names.add(name)
+        return byName[name.substringAfterLast('.')] ?: EnumClassLookup.NotFound
+    }
+}
+
+private fun genericEnumStages() {
+    println("\n[generic Enum: stage detection]")
+    check("no dot is stage 1", GenericEnumStage.parse("Pa") is GenericEnumStage.ClassName)
+    eq("stage 1 keeps the prefix", "Pa", (GenericEnumStage.parse("Pa") as GenericEnumStage.ClassName).prefix)
+    check("empty text is stage 1", GenericEnumStage.parse("") is GenericEnumStage.ClassName)
+
+    val afterDot = GenericEnumStage.parse("PageItems2.")
+    check("trailing dot is stage 2", afterDot is GenericEnumStage.Constant)
+    eq("stage 2 class name", "PageItems2", (afterDot as GenericEnumStage.Constant).className)
+    eq("stage 2 empty value prefix", "", afterDot.valuePrefix)
+
+    val withPrefix = GenericEnumStage.parse("PageItems2.LO") as GenericEnumStage.Constant
+    eq("stage 2 class name with prefix", "PageItems2", withPrefix.className)
+    eq("stage 2 value prefix", "LO", withPrefix.valuePrefix)
+
+    val qualified = GenericEnumStage.parse("com.foo.PageItems.LO") as GenericEnumStage.Constant
+    eq("fully qualified class name", "com.foo.PageItems", qualified.className)
+    eq("fully qualified value prefix", "LO", qualified.valuePrefix)
+}
+
+private fun genericEnumBrowsing() {
+    println("\n[generic Enum: two-stage browsing]")
+    val pageItems = FakeClass("PageItems", "com.foo.web.PageItems", true, listOf("LOGIN_BUTTON", "LOGOUT_BUTTON"))
+    val pageItems2 = FakeClass(
+        "PageItems2", "com.foo.web.PageItems2", true,
+        listOf("LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON"),
+    )
+    val header = FakeClass("HeaderItems", "com.foo.common.HeaderItems", true, listOf("LOGO"))
+    val anchor = FakeClass("Anchor", "com.foo.Anchor", false)
+
+    val catalog = CountingCatalog(listOf(pageItems, pageItems2, header))
+    val resolver = CountingResolver(
+        mapOf(
+            "PageItems" to EnumClassLookup.Found(pageItems),
+            "PageItems2" to EnumClassLookup.Found(pageItems2),
+        ),
+    )
+    val browser = GenericEnumBrowser(catalog, resolver)
+
+    val stage1 = browser.candidatesFor(anchor, "Pa")
+    check("stage 1 offers classes", stage1 is GenericEnumCandidates.Classes)
+    eq("stage 1 lists every project enum", 3, (stage1 as GenericEnumCandidates.Classes).classes.size)
+    eq("stage 1 consulted the catalogue", 1, catalog.calls)
+    eq("stage 1 did not resolve a class directly", 0, resolver.calls)
+
+    val stage2 = browser.candidatesFor(anchor, "PageItems2.LO")
+    check("stage 2 offers constants", stage2 is GenericEnumCandidates.Constants)
+    val constants = stage2 as GenericEnumCandidates.Constants
+    eq("stage 2 owner", "com.foo.web.PageItems2", constants.owner.qualifiedName)
+    eq(
+        "stage 2 lists only that enum's constants",
+        listOf("LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON"),
+        constants.names,
+    )
+    eq("stage 2 value prefix", "LO", constants.valuePrefix)
+    // The mandatory optimisation: after the dot nothing may scan the project again.
+    eq("stage 2 never rebuilt the enum catalogue", 1, catalog.calls)
+    eq("stage 2 resolved exactly one class directly", 1, resolver.calls)
+    eq("stage 2 asked for the typed name only", listOf("PageItems2"), resolver.names)
+
+    val unknown = browser.candidatesFor(anchor, "Nope.LO")
+    check("unknown class offers nothing", unknown === GenericEnumCandidates.None)
+    eq("unknown class did not rebuild the catalogue", 1, catalog.calls)
+}
+
+private fun genericEnumAmbiguity() {
+    println("\n[generic Enum: same short name in two packages]")
+    val web = FakeClass("PageItems", "com.foo.web.PageItems", true, listOf("LOGIN_BUTTON", "WEB_ONLY"))
+    val mobile = FakeClass("PageItems", "com.foo.mobile.PageItems", true, listOf("LOGIN_BUTTON", "MOBILE_ONLY"))
+    val anchor = FakeClass("Anchor", "com.foo.Anchor", false)
+
+    val ambiguous = GenericEnumBrowser(
+        CountingCatalog(listOf(web, mobile)),
+        CountingResolver(mapOf("PageItems" to EnumClassLookup.Ambiguous(listOf(web, mobile)))),
+    )
+
+    val guessed = ambiguous.candidatesFor(anchor, "PageItems.LO")
+    check("ambiguous short name offers nothing rather than the wrong enum", guessed === GenericEnumCandidates.None)
+
+    // ... unless the user picked one of them from the stage 1 list moments ago.
+    val resolved = ambiguous.candidatesFor(anchor, "PageItems.LO", preferred = mobile)
+    check("the stage 1 selection breaks the tie", resolved is GenericEnumCandidates.Constants)
+    eq(
+        "and it is the class the user picked",
+        "com.foo.mobile.PageItems",
+        (resolved as GenericEnumCandidates.Constants).owner.qualifiedName,
+    )
+}
+
+private fun qualifiedPrefixMatching() {
+    println("\n[generic Enum: stage 2 prefix matcher]")
+    val constants = listOf("LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON")
+
+    val typed = GaugeQualifiedValuePrefixMatcher.forCandidates("PageItems2.LO", constants)
+    eq("replacement range covers class name and prefix", "PageItems2.LO", typed.prefix)
+    check("LO matches LOGIN_BUTTON", typed.prefixMatches("LOGIN_BUTTON"))
+    check("LO matches LOGOUT_BUTTON", typed.prefixMatches("LOGOUT_BUTTON"))
+    check("LO does not match SETTINGS_BUTTON", !typed.prefixMatches("SETTINGS_BUTTON"))
+
+    val lower = GaugeQualifiedValuePrefixMatcher.forCandidates("PageItems2.lo", constants)
+    check("matching is case insensitive", lower.prefixMatches("LOGIN_BUTTON"))
+
+    val empty = GaugeQualifiedValuePrefixMatcher.forCandidates("PageItems2.", constants)
+    eq("empty suffix still replaces the class name", "PageItems2.", empty.prefix)
+    check("empty suffix matches everything", constants.all { empty.prefixMatches(it) })
+
+    val wrong = GaugeQualifiedValuePrefixMatcher.forCandidates("PageItems2.WRONG", constants)
+    check("wrong suffix falls back to showing everything", constants.all { wrong.prefixMatches(it) })
+    eq("wrong suffix replacement range covers it all", "PageItems2.WRONG", wrong.prefix)
+}
+
 fun main() {
     println("Gauge Typed Parameters - local (no-IDE) checks")
     annotationTemplates()
@@ -280,6 +419,10 @@ fun main() {
     completionValues()
     prefixMatching()
     validation()
+    genericEnumStages()
+    genericEnumBrowsing()
+    genericEnumAmbiguity()
+    qualifiedPrefixMatching()
     println("\n================================")
     println("passed=$passed failed=$failed")
     if (failed > 0) {

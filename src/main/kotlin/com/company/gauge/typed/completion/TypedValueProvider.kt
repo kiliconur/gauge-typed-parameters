@@ -17,10 +17,10 @@ interface TypedValueProvider {
 
 /** `enum Element { LOGIN_BUTTON, ... }` -> `LOGIN_BUTTON`, ... */
 class EnumCompletionProvider : TypedValueProvider {
-    override fun supports(kind: GaugeParameterKind) = kind is GaugeParameterKind.EnumKind
+    override fun supports(kind: GaugeParameterKind) = kind is GaugeParameterKind.SpecificEnumKind
 
     override fun values(kind: GaugeParameterKind): List<TypedValue> {
-        val enumKind = kind as? GaugeParameterKind.EnumKind ?: return emptyList()
+        val enumKind = kind as? GaugeParameterKind.SpecificEnumKind ?: return emptyList()
         return enumKind.constantNames.map { TypedValue(it, enumKind.typeName, PRIORITY) }
     }
 

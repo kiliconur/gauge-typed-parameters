@@ -1,7 +1,11 @@
 package com.company.gauge.typed.completion
 
 import com.company.gauge.typed.GtpLog
+import com.company.gauge.typed.enums.DirectEnumClassResolver
+import com.company.gauge.typed.enums.GenericEnumBrowser
+import com.company.gauge.typed.enums.ProjectEnumClassProvider
 import com.company.gauge.typed.gauge.GaugeParameterContext
+import com.company.gauge.typed.model.GaugeParameterKind
 import com.company.gauge.typed.model.TypedParameterResolver
 import com.intellij.codeInsight.completion.CompletionContributor
 import com.intellij.codeInsight.completion.CompletionParameters
@@ -18,14 +22,13 @@ import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.util.ProcessingContext
 import com.intellij.codeInsight.completion.PrioritizedLookupElement
-import com.thoughtworks.gauge.language.Specification
 
 /**
  * Offers values for Gauge step parameters based on the Java type of the corresponding
- * step implementation parameter.
+ * step implementation parameter - in `.spec` files and in `.cpt` concept files alike.
  *
- * The Gauge spec syntax is untouched: candidates are inserted as plain text inside the
- * existing `"..."` parameter.
+ * The Gauge syntax is untouched: candidates are inserted as plain text inside the existing
+ * `"..."` parameter.
  */
 class GaugeTypedParameterCompletionContributor : CompletionContributor() {
 
@@ -33,9 +36,12 @@ class GaugeTypedParameterCompletionContributor : CompletionContributor() {
         // If this line is absent from idea.log the extension was never registered, i.e. the
         // plugin descriptor did not load - not a resolution problem.
         GtpLog.info("contributor constructed - extension registered")
+        // The extension itself is registered per language in plugin.xml (Specification for
+        // .spec, Concept for .cpt), so the pattern only has to accept any leaf; every position
+        // that is not a Gauge parameter is dropped by GaugeParameterContext.atCaret anyway.
         extend(
             CompletionType.BASIC,
-            PlatformPatterns.psiElement().withLanguage(Specification.INSTANCE),
+            PlatformPatterns.psiElement(),
             TypedParameterCompletionProvider(),
         )
     }
@@ -91,6 +97,23 @@ class GaugeTypedParameterCompletionContributor : CompletionContributor() {
             val resolved = TypedParameterResolver.resolve(project, parameterContext)
             if (resolved == null) {
                 GtpLog.info("aborted: no typed parameter resolved (see stages above)")
+                return
+            }
+
+            // `java.lang.Enum` is the "browse the project's enums" signal: two-stage completion,
+            // enum class names first and that class's constants after the dot.
+            if (resolved.kind === GaugeParameterKind.GenericEnumKind) {
+                val browser = GenericEnumBrowser(
+                    ProjectEnumClassProvider.getInstance(project),
+                    DirectEnumClassResolver.getInstance(project),
+                )
+                val added = GenericEnumCompletionProvider(browser)
+                    .addCompletions(parameters, result, parameterContext)
+                if (!added) {
+                    GtpLog.info("10. no candidates for the generic Enum parameter (see stages above)")
+                    return
+                }
+                if (parameterContext.insideQuotes) result.stopHere()
                 return
             }
 
@@ -155,19 +178,9 @@ class GaugeTypedParameterCompletionContributor : CompletionContributor() {
      */
     private object QuoteWrappingInsertHandler : InsertHandler<LookupElement> {
         override fun handleInsert(context: InsertionContext, item: LookupElement) {
-            val document = context.document
-            val start = context.startOffset
-            val end = context.tailOffset
-            if (start < 0 || end > document.textLength || start > end) return
-
-            val alreadyQuoted =
-                start > 0 && document.charsSequence[start - 1] == '"' &&
-                    end < document.textLength && document.charsSequence[end] == '"'
-            if (alreadyQuoted) return
-
-            document.insertString(end, "\"")
-            document.insertString(start, "\"")
-            context.editor.caretModel.moveToOffset(end + 2)
+            val caret = GaugeQuotes.wrap(context.document, context.startOffset, context.tailOffset)
+            if (caret < 0) return
+            context.editor.caretModel.moveToOffset(caret)
             context.commitDocument()
         }
     }

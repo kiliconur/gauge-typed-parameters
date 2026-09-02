@@ -1,7 +1,8 @@
 # Gauge Typed Parameters
 
-A standalone IntelliJ IDEA plugin that enhances Gauge specifications with **semantic typed
-parameter completion** based on the Java types of your Gauge step implementations.
+A standalone IntelliJ IDEA plugin that enhances Gauge specifications (`.spec`) and concept files
+(`.cpt`) with **semantic typed parameter completion** based on the Java types of your Gauge step
+implementations.
 
 The official [Gauge plugin](https://plugins.jetbrains.com/plugin/7535-gauge) is **not forked, not
 patched and not bundled**. This is a separate plugin that declares a normal dependency on it
@@ -50,6 +51,11 @@ Selecting `LOGIN_BUTTON` produces exactly:
 
 - **Enum completion** — the constants of the resolved Java enum, and nothing else. Two enum
   parameters in one step never leak candidates into each other.
+- **Concept file support** — the same completion and the same inspection inside `.cpt` files.
+  Spec PSI and concept PSI feed one shared pipeline; there is no second engine.
+- **Project enum browser for `java.lang.Enum` parameters** — declaring a parameter as the raw
+  base class asks for enum *class* names first and that class's constants after a dot. See
+  [below](#the-javalangenum-project-enum-browser).
 - **Case-insensitive prefix matching** — typing `lo`, `LO` or `Lo` all match `LOGIN_BUTTON`.
   Insertion is *not* case-adjusted: you always get the constant exactly as declared.
 - **Boolean completion** — `true` / `false` for `boolean` and `java.lang.Boolean`.
@@ -74,7 +80,6 @@ Selecting `LOGIN_BUTTON` produces exactly:
 
 - **Java step implementations only.** The resolver is structured so Kotlin can be added later,
   but it is not implemented.
-- **Concept files (`.cpt`) are not supported** — only `.spec` files.
 - **Auto-quoting outside existing quotes is best-effort and currently inert on a stock install.**
   For a caret in plain step text the position is a `STEP` token, and Gauge's own
   `StepCompletionProvider` begins with `resultSet.stopHere()`, which suppresses every contributor
@@ -82,11 +87,70 @@ Selecting `LOGIN_BUTTON` produces exactly:
   relative order, so Gauge wins in practice. Completion *inside* quotes — the primary feature — is
   unaffected by this.
 
+### The `java.lang.Enum` project enum browser
+
+Sometimes a step accepts a constant of *any* project enum and the implementation resolves the
+enum itself at run time. Declaring the parameter as the raw base class is the signal for that:
+
+```java
+@Step("<item> menusune git")
+public void goToMenu(Enum item) {
+}
+```
+
+**Stage 1 — enum class names.** With the caret inside the quotes:
+
+```
+* "Pag<caret>" menusune git
+```
+
+<kbd>Ctrl</kbd>+<kbd>Space</kbd> lists the project's enum *classes*, with their packages shown in
+the popup only:
+
+```
+PageItems          enum   com.company.pages
+PageItems2         enum   com.company.pages
+PageHeaderItems    enum   com.company.common
+```
+
+Selecting `PageItems2` inserts just the class name — never the package.
+
+**Stage 2 — that class's constants.** Type a dot and press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again:
+
+```
+* "PageItems2.LO<caret>" menusune git   →   LOGIN_BUTTON
+                                            LOGOUT_BUTTON
+```
+
+Selecting `LOGIN_BUTTON` replaces the whole temporary value:
+
+```
+* "LOGIN_BUTTON" menusune git
+```
+
+The class name is a browsing namespace inside the IDE only; it never stays in the Gauge file.
+
+Details worth knowing:
+
+- A parameter typed as a **concrete** enum (`PageItems item`) keeps the direct behaviour —
+  constants immediately, no class-browsing step. Only exactly `java.lang.Enum` switches modes.
+- Only enums from the current module, its dependencies and the project's own sources are listed.
+  JDK, IntelliJ platform, Gauge and third-party library enums are never offered.
+- Stage 2 resolves the named class directly through the Java short-name index and reads only that
+  class's constants — it never re-enumerates the project's enums, so the path stays cheap in large
+  projects.
+- Two enums sharing a short name (`com.foo.web.Screens`, `com.foo.mobile.Screens`) are listed
+  separately with their packages. If such a name is typed by hand and stays ambiguous, **no**
+  constants are offered rather than the wrong enum's; picking the class from the list first, or
+  typing the fully qualified name (`com.foo.mobile.Screens.`), resolves it.
+- A `java.lang.Enum` parameter is never flagged by the inspection: there is no single legal value
+  set to validate against, and intermediate text such as `PageItems2.` must not light up red.
+
 ## Installation
 
 ### Option 1 — use the prebuilt ZIP
 
-1. Download [`release/gauge-typed-parameters-1.0.0.zip`](release/gauge-typed-parameters-1.0.0.zip)
+1. Download [`release/gauge-typed-parameters-1.1.0.zip`](release/gauge-typed-parameters-1.1.0.zip)
 2. In IntelliJ IDEA: **Settings → Plugins → gear icon → Install Plugin from Disk…**
 3. Select the ZIP
 4. Restart IntelliJ IDEA
@@ -143,7 +207,7 @@ gradlew.bat clean test buildPlugin
 Result:
 
 ```
-build/distributions/gauge-typed-parameters-1.0.0.zip
+build/distributions/gauge-typed-parameters-1.1.0.zip
 ```
 
 ### Toolchain
@@ -165,7 +229,7 @@ with a dotted capital İ, which breaks the IDE descriptor parse.
 ### Tests
 
 ```
-gradlew.bat test          # 42 tests: IntelliJ fixture tests + plain JUnit
+gradlew.bat test          # IntelliJ fixture tests + plain JUnit
 ```
 
 `tools/local-verification/run.sh` additionally exercises the plugin's pure decision logic
@@ -175,16 +239,22 @@ environments where downloading the IntelliJ Platform is not an option.
 ## Architecture
 
 ```
-caret inside a Gauge parameter
-  → SpecStep                     the enclosing step invocation
+caret inside a Gauge parameter (.spec or .cpt)
+  → SpecStep / ConceptStep       the enclosing step invocation, via GaugeDialect
   → canonical template           * "CHROME" ile "3" kere "LOG|" …  →  {} ile {} kere {} …
   → placeholder index            which parameter the caret is in (here: 2)
   → Gauge step implementation    the matching @Step-annotated method
   → PsiMethod
   → PsiParameter                 the parameter at that index
   → PsiType
-  → enum / boolean / numeric / string / unsupported
+  → specific enum / java.lang.Enum / boolean / numeric / string / unsupported
 ```
+
+`.spec` and `.cpt` differ only in the first two lines of that pipeline. Gauge models concepts with
+a structurally identical PSI hierarchy (`ConceptStep` / `ConceptArg` / `ConceptStaticArg`,
+generated from the same grammar shape) and resolves concept steps by wrapping their AST node in a
+`SpecStepImpl` and calling the same `StepUtil.findStepImpl`. `GaugeDialect` captures exactly that
+correspondence, so everything downstream is shared.
 
 Step resolution tries Gauge's own `StepReference` first — the same path *Go to step
 implementation* uses — and falls back to matching the canonical template against every
@@ -198,9 +268,10 @@ No Java source is parsed by hand, and this plugin contains no second Gauge parse
 ### Gauge APIs reused
 
 - `SpecStep`, `SpecArg`, `SpecStaticArg`, `SpecTable` — the spec PSI
-- `SpecTokenTypes` — token/element types
-- `Specification.INSTANCE` — the language
-- `StepReference` — Gauge's own step → implementation resolution
+- `ConceptStep`, `ConceptArg`, `ConceptStaticArg`, `ConceptTable` — the concept PSI
+- `SpecTokenTypes`, `ConceptTokenTypes` — token/element types
+- `Specification.INSTANCE`, `Concept.INSTANCE` — the two languages
+- `StepReference`, `ConceptReference` — Gauge's own step → implementation resolution
 - `StepUtil.getGaugeStepAnnotationValues` — reads `@Step` values, aliases and constant folding
 
 All Gauge-specific integration is isolated in **`GaugeStepAdapter`** and **`GaugeStepResolver`**.
@@ -211,6 +282,7 @@ Gauge release changes these APIs, those two files are the only ones that need to
 
 ```
 src/main/kotlin/com/company/gauge/typed/
+    gauge/GaugeDialect.kt            Specification (.spec) and Concept (.cpt) PSI behind one API
     gauge/GaugeStepAdapter.kt        the ONLY place that touches Gauge PSI types
     gauge/GaugeParameterContext.kt   invocation PSI + placeholder index + prefix
     gauge/GaugeStepResolver.kt       invocation → PsiMethod
@@ -218,7 +290,10 @@ src/main/kotlin/com/company/gauge/typed/
     model/GaugeParameterKind.kt      enum / boolean / numeric / string / unsupported
     model/GaugeValueValidator.kt     pure validation + quick-fix ranking, no IntelliJ API
     model/TypedParameterResolver.kt  ties it together, fails closed
-    completion/…                     contributor, providers, prefix matcher
+    completion/…                     contributor, providers, prefix matchers, insert handlers
+    enums/GenericEnumBrowser.kt      java.lang.Enum: stage decision logic, injectable
+    enums/ProjectEnumClassProvider.kt stage 1: project enum classes, index backed + cached
+    enums/DirectEnumClassResolver.kt stage 2: one class by name, no project scan
     inspection/…                     inspection + replace quick fix
 src/test/kotlin/…                    fixture tests + plain JUnit tests
 sample-project/                      manual test bed (Gauge + Java)

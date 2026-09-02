@@ -1,5 +1,6 @@
 package com.company.gauge.typed
 
+import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.testFramework.LightProjectDescriptor
@@ -85,6 +86,24 @@ abstract class GaugeTypedParametersTestCase : LightJavaCodeInsightFixtureTestCas
         return "com.example.$className"
     }
 
+    /**
+     * Three project enums used by the `java.lang.Enum` browser tests. Their constants
+     * deliberately do NOT overlap, so "only PageItems2 constants" is a real assertion.
+     */
+    protected fun addProjectEnums() {
+        myFixture.addClass("package com.example.pages; public enum PageItems { HOME_BUTTON, PROFILE_BUTTON }")
+        myFixture.addClass(
+            "package com.example.pages; public enum PageItems2 { LOGIN_BUTTON, LOGOUT_BUTTON, SETTINGS_BUTTON }",
+        )
+        myFixture.addClass("package com.example.common; public enum HeaderItems { LOGO, SEARCH_BOX }")
+    }
+
+    /** The same short name in two packages - the case that must never be guessed. */
+    protected fun addAmbiguousEnums() {
+        myFixture.addClass("package com.foo.web; public enum Screens { WEB_HOME, WEB_ONLY }")
+        myFixture.addClass("package com.foo.mobile; public enum Screens { MOBILE_HOME, MOBILE_ONLY }")
+    }
+
     protected fun spec(vararg steps: String): String =
         buildString {
             appendLine("# Typed parameters")
@@ -94,9 +113,31 @@ abstract class GaugeTypedParametersTestCase : LightJavaCodeInsightFixtureTestCas
             steps.forEach { appendLine(it) }
         }
 
+    /** A `.cpt` concept file: a heading followed by the concept's steps. */
+    protected fun concept(vararg steps: String): String =
+        buildString {
+            appendLine("# Typed parameters konsepti")
+            appendLine()
+            steps.forEach { appendLine(it) }
+        }
+
     /** Runs basic completion and returns the offered lookup strings (never null). */
     protected fun completionStrings(): List<String> {
         myFixture.completeBasic()
         return myFixture.lookupElementStrings ?: emptyList()
+    }
+
+    /** Runs completion and picks [lookupString] from the popup. */
+    protected fun selectLookupItem(lookupString: String) {
+        val elements = myFixture.completeBasic()
+        // null means there was exactly one match and the platform already inserted it;
+        // the following checkResult() call verifies what landed in the document.
+        if (elements == null) return
+        val lookup = myFixture.lookup
+        assertNotNull("No lookup shown for '$lookupString'", lookup)
+        val item = elements.firstOrNull { it.lookupString == lookupString }
+        assertNotNull("'$lookupString' was not offered, got ${elements.map { it.lookupString }}", item)
+        lookup!!.setCurrentItem(item)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
     }
 }

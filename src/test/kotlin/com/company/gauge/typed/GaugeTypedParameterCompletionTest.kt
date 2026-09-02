@@ -379,9 +379,9 @@ class GaugeTypedParameterCompletionTest : GaugeTypedParametersTestCase() {
             """,
         )
         val kind = firstParameterKind(fqn)
-        assertTrue("expected an enum kind but got $kind", kind is GaugeParameterKind.EnumKind)
+        assertTrue("expected an enum kind but got $kind", kind is GaugeParameterKind.SpecificEnumKind)
         assertContainsElements(
-            (kind as GaugeParameterKind.EnumKind).constantNames,
+            (kind as GaugeParameterKind.SpecificEnumKind).constantNames,
             "LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON",
         )
     }
@@ -390,18 +390,5 @@ class GaugeTypedParameterCompletionTest : GaugeTypedParametersTestCase() {
         val psiClass = myFixture.findClass(classFqn)
         val method = psiClass.methods.first()
         return JavaStepParameterResolver.kindOf(method.parameterList.parameters.first())
-    }
-
-    private fun selectLookupItem(lookupString: String) {
-        val elements = myFixture.completeBasic()
-        // null means there was exactly one match and the platform already inserted it;
-        // the following checkResult() call verifies what landed in the document.
-        if (elements == null) return
-        val lookup = myFixture.lookup
-        assertNotNull("No lookup shown for '$lookupString'", lookup)
-        val item = elements.firstOrNull { it.lookupString == lookupString }
-        assertNotNull("'$lookupString' was not offered, got ${elements.map { it.lookupString }}", item)
-        lookup!!.setCurrentItem(item)
-        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
     }
 }
