@@ -21,3 +21,8 @@ tools/local-verification/.out/
 # IntelliJ Platform Gradle Plugin / Kotlin caches
 .intellijPlatform/
 .kotlin/
+
+# Unrelated downloads that happen to sit in release/ - only this plugin's own
+# ZIP belongs in the repository.
+/release/*
+!/release/gauge-typed-parameters-*.zip
