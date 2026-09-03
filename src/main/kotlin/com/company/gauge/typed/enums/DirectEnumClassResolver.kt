@@ -13,7 +13,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.search.PsiShortNamesCache
 
 /**
- * Stage 2 of the `java.lang.Enum` browser: resolve exactly the enum class the user named.
+ * Stage 2 of the project enum browser: resolve exactly the enum class the user named.
  *
  * This is the performance-critical path. Once the text has the shape `EnumClassName.<prefix>`
  * nothing here enumerates project enums or project classes: a short name goes through the Java

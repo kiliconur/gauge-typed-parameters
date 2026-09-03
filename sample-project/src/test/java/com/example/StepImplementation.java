@@ -29,12 +29,12 @@ public class StepImplementation {
     }
 
     /**
-     * Declaring the parameter as the raw java.lang.Enum is an intentional signal: completion
-     * first offers the project's enum CLASS names, and after typing a dot the constants of that
-     * class. Only the constant is written to the .spec file, and this method resolves which
-     * enum it belongs to at run time.
+     * A plain String parameter. The value stays free text - anything is legal here - but
+     * completion offers the project enum browser as assistance: enum CLASS names first, then
+     * that class's constants after a dot. Only the constant is written to the .spec file, and
+     * this method decides at run time which enum it belongs to.
      */
     @Step("<item> menusune git")
-    public void goToMenu(Enum item) {
+    public void goToMenu(String item) {
     }
 }

@@ -2,7 +2,7 @@ package com.company.gauge.typed.completion
 
 import com.company.gauge.typed.GtpLog
 import com.company.gauge.typed.enums.DirectEnumClassResolver
-import com.company.gauge.typed.enums.GenericEnumBrowser
+import com.company.gauge.typed.enums.ProjectEnumBrowser
 import com.company.gauge.typed.enums.ProjectEnumClassProvider
 import com.company.gauge.typed.gauge.GaugeParameterContext
 import com.company.gauge.typed.model.GaugeParameterKind
@@ -100,20 +100,20 @@ class GaugeTypedParameterCompletionContributor : CompletionContributor() {
                 return
             }
 
-            // `java.lang.Enum` is the "browse the project's enums" signal: two-stage completion,
-            // enum class names first and that class's constants after the dot.
-            if (resolved.kind === GaugeParameterKind.GenericEnumKind) {
-                val browser = GenericEnumBrowser(
+            // A String parameter is free text. We add the project enum browser as editing
+            // assistance - enum class names, then that class's constants after a dot - and
+            // deliberately do NOT call stopHere(): anything else the IDE or Gauge would suggest
+            // stays available, because any value the user types is legal here.
+            if (resolved.kind === GaugeParameterKind.StringEnumBrowserKind) {
+                val browser = ProjectEnumBrowser(
                     ProjectEnumClassProvider.getInstance(project),
                     DirectEnumClassResolver.getInstance(project),
                 )
-                val added = GenericEnumCompletionProvider(browser)
+                val added = ProjectEnumCompletionProvider(browser)
                     .addCompletions(parameters, result, parameterContext)
                 if (!added) {
-                    GtpLog.info("10. no candidates for the generic Enum parameter (see stages above)")
-                    return
+                    GtpLog.info("10. no enum browser candidates for this String parameter")
                 }
-                if (parameterContext.insideQuotes) result.stopHere()
                 return
             }
 

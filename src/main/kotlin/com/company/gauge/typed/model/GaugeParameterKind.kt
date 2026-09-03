@@ -29,12 +29,15 @@ sealed interface GaugeParameterKind {
     }
 
     /**
-     * The parameter is declared as exactly `java.lang.Enum` - the raw base class, never a
-     * concrete enum. That is an intentional signal from the step implementation: "any project
-     * enum constant is acceptable here", which switches completion to the two-stage project
-     * enum browser (enum class names first, then that class's constants).
+     * `java.lang.String` / `CharSequence`.
+     *
+     * Free text as far as the language is concerned: **never validated, never restricted** - any
+     * value the user types is legal. As pure editing assistance, completion offers the two-stage
+     * project enum browser here (enum class names first, then that class's constants), because
+     * in practice a great many Gauge string parameters carry an enum constant name that the step
+     * implementation converts itself. Nothing about that is enforced.
      */
-    data object GenericEnumKind : GaugeParameterKind
+    data object StringEnumBrowserKind : GaugeParameterKind
 
     /** `boolean` or `java.lang.Boolean`. */
     data object BooleanKind : GaugeParameterKind
@@ -42,18 +45,15 @@ sealed interface GaugeParameterKind {
     /** Any of the Java integral / floating point types and their box types. */
     data class NumericKind(val typeName: String, val integral: Boolean) : GaugeParameterKind
 
-    /** `java.lang.String` / `CharSequence` - free text, no completion, no validation. */
-    data object StringKind : GaugeParameterKind
-
     /** Anything we deliberately stay silent about (tables, custom types, generics, ...). */
     data object UnsupportedKind : GaugeParameterKind
 
     companion object {
         /**
          * Values the plugin can offer as completion for this kind without any further context,
-         * empty when it cannot. [GenericEnumKind] deliberately yields nothing here: its
+         * empty when it cannot. [StringEnumBrowserKind] deliberately yields nothing here: its
          * candidates depend on the project index and on what has been typed so far, and are
-         * produced by [com.company.gauge.typed.enums.GenericEnumBrowser].
+         * produced by [com.company.gauge.typed.enums.ProjectEnumBrowser].
          */
         fun completionValues(kind: GaugeParameterKind): List<String> = when (kind) {
             is SpecificEnumKind -> kind.constantNames

@@ -134,8 +134,9 @@ class GaugeTypedParameterCompletionTest : GaugeTypedParametersTestCase() {
         assertContainsElements(completionStrings(), "true", "false")
     }
 
-    // TEST 5 - String parameters get no typed completion
-    fun testStringParameterOffersNoTypedValues() {
+    // TEST 5 - a String parameter never gets another type's enum constants. (It does get the
+    // project enum browser - enum CLASS names - which is covered by ProjectEnumBrowserTest.)
+    fun testStringParameterOffersNoEnumConstants() {
         addElementEnum()
         addStepImplementation(
             """

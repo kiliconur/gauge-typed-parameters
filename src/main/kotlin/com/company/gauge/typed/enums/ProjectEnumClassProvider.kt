@@ -57,7 +57,7 @@ internal object GaugeEnumSearchScopes {
 }
 
 /**
- * Stage 1 of the `java.lang.Enum` browser: every enum class declared in the user's project.
+ * Stage 1 of the project enum browser: every enum class declared in the user's project.
  *
  * Backed by the platform's own class index ([AllClassesSearch]) and cached per module through
  * [CachedValuesManager] with [PsiModificationTracker.MODIFICATION_COUNT], so no manually

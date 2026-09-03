@@ -64,9 +64,9 @@ object TypedParameterResolver {
                 "8. specific enum class resolved: ${kind.psiClass.qualifiedName}" +
                     " | 9. constants=${kind.constantNames}",
             )
-            GaugeParameterKind.GenericEnumKind -> GtpLog.info(
-                "8. GenericEnum mode (parameter declared as exactly java.lang.Enum)" +
-                    " | 9. values come from the project enum browser",
+            GaugeParameterKind.StringEnumBrowserKind -> GtpLog.info(
+                "8. String parameter - unrestricted free text" +
+                    " | 9. project enum browser offered as assistance only, never validated",
             )
             GaugeParameterKind.BooleanKind -> GtpLog.info("8. boolean parameter | 9. values=[true, false]")
             else -> GtpLog.info("8. kind=$kind - no completion values for this type by design")

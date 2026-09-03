@@ -87,7 +87,7 @@ abstract class GaugeTypedParametersTestCase : LightJavaCodeInsightFixtureTestCas
     }
 
     /**
-     * Three project enums used by the `java.lang.Enum` browser tests. Their constants
+     * Three project enums used by the project enum browser tests. Their constants
      * deliberately do NOT overlap, so "only PageItems2 constants" is a real assertion.
      */
     protected fun addProjectEnums() {

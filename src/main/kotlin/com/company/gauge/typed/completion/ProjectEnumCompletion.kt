@@ -1,9 +1,9 @@
 package com.company.gauge.typed.completion
 
 import com.company.gauge.typed.GtpLog
-import com.company.gauge.typed.enums.GenericEnumBrowser
-import com.company.gauge.typed.enums.GenericEnumCandidates
-import com.company.gauge.typed.enums.GenericEnumStage
+import com.company.gauge.typed.enums.ProjectEnumBrowser
+import com.company.gauge.typed.enums.ProjectEnumCandidates
+import com.company.gauge.typed.enums.ProjectEnumStage
 import com.intellij.codeInsight.completion.CompletionParameters
 import com.intellij.codeInsight.completion.CompletionResultSet
 import com.intellij.codeInsight.completion.InsertHandler
@@ -22,14 +22,15 @@ import com.intellij.psi.SmartPsiElementPointer
 import com.company.gauge.typed.gauge.GaugeParameterContext
 
 /**
- * Renders the two stages of the `java.lang.Enum` browser into a completion result set.
+ * Renders the two stages of the project enum browser into a completion result set.
  *
- * Stage 1 offers enum CLASS names (`PageItems`, `PageItems2`, ...), stage 2 - after the user
- * typed `PageItems2.` - offers only that class's constants. The class name is a temporary
- * browsing namespace: selecting a constant replaces `PageItems2.LO` with `LOGIN_BUTTON`, so the
- * Gauge file never keeps the class name.
+ * Offered on `String` parameters, as assistance only - the value stays free text and is never
+ * validated. Stage 1 offers enum CLASS names (`PageItems`, `PageItems2`, ...), stage 2 - after
+ * the user typed `PageItems2.` - offers only that class's constants. The class name is a
+ * temporary browsing namespace: selecting a constant replaces `PageItems2.LO` with
+ * `LOGIN_BUTTON`, so the Gauge file never keeps the class name.
  */
-internal class GenericEnumCompletionProvider(private val browser: GenericEnumBrowser) {
+internal class ProjectEnumCompletionProvider(private val browser: ProjectEnumBrowser) {
 
     /** @return true when candidates were added. */
     fun addCompletions(
@@ -38,36 +39,45 @@ internal class GenericEnumCompletionProvider(private val browser: GenericEnumBro
         context: GaugeParameterContext,
     ): Boolean {
         val anchor = parameters.originalFile
-        val stage = GenericEnumStage.parse(context.prefix)
+        val stage = ProjectEnumStage.parse(context.prefix)
         val preferred = when (stage) {
-            is GenericEnumStage.Constant ->
-                GenericEnumSelectionContext.preferred(
+            is ProjectEnumStage.Constant ->
+                ProjectEnumSelectionContext.preferred(
                     parameters.editor,
                     stage.className.substringAfterLast('.'),
                 )
 
-            is GenericEnumStage.ClassName -> null
+            is ProjectEnumStage.ClassName -> null
         }
 
         return when (val candidates = browser.candidatesFor(anchor, context.prefix, preferred)) {
-            is GenericEnumCandidates.Classes -> addClassNames(result, context, candidates)
-            is GenericEnumCandidates.Constants -> addConstants(result, context, candidates)
-            GenericEnumCandidates.None -> false
+            is ProjectEnumCandidates.Classes -> addClassNames(result, context, candidates)
+            is ProjectEnumCandidates.Constants -> addConstants(result, context, candidates)
+            ProjectEnumCandidates.None -> false
         }
     }
 
     private fun addClassNames(
         result: CompletionResultSet,
         context: GaugeParameterContext,
-        candidates: GenericEnumCandidates.Classes,
+        candidates: ProjectEnumCandidates.Classes,
     ): Boolean {
-        val names = candidates.classes.mapNotNull { it.name }
-        if (names.isEmpty()) return false
+        // No match-all fallback here, unlike the closed-type completion: the parameter is free
+        // text, so text that matches no enum class name is simply the user writing something
+        // else ("custom value", "abc123") and must not pop up the whole enum catalogue.
+        val matcher = GaugeValuePrefixMatcher(candidates.prefix, matchAll = candidates.prefix.isEmpty())
+        val matching = candidates.classes.filter { it.name?.let(matcher::prefixMatches) == true }
+        if (matching.isEmpty()) {
+            GtpLog.info(
+                "10. Stage1 no enum class matches '${candidates.prefix}'" +
+                    " (${candidates.classes.size} in the project) - free text, nothing offered",
+            )
+            return false
+        }
 
-        val matcher = GaugeValuePrefixMatcher.forCandidates(candidates.prefix, names)
         val out = result.withPrefixMatcher(matcher)
 
-        for (psiClass in candidates.classes) {
+        for (psiClass in matching) {
             val name = psiClass.name ?: continue
             // Package/type information goes into the presentation only - never into the
             // inserted text, which stays the bare class name.
@@ -82,14 +92,17 @@ internal class GenericEnumCompletionProvider(private val browser: GenericEnumBro
         // just keep filtering class names by "PageItems2." and show nothing.
         out.restartCompletionOnAnyPrefixChange()
 
-        GtpLog.info("10. Stage1 offered ${names.size} enum class name(s) | prefix='${candidates.prefix}'")
+        GtpLog.info(
+            "10. Stage1 offered ${matching.size} enum class name(s)" +
+                " of ${candidates.classes.size} | prefix='${candidates.prefix}'",
+        )
         return true
     }
 
     private fun addConstants(
         result: CompletionResultSet,
         context: GaugeParameterContext,
-        candidates: GenericEnumCandidates.Constants,
+        candidates: ProjectEnumCandidates.Constants,
     ): Boolean {
         val matcher = GaugeQualifiedValuePrefixMatcher.forCandidates(context.prefix, candidates.names)
         val out = result.withPrefixMatcher(matcher)
@@ -99,7 +112,7 @@ internal class GenericEnumCompletionProvider(private val browser: GenericEnumBro
             val element = LookupElementBuilder.create(constant)
                 .withTypeText(ownerName, true)
                 .withInsertHandler(
-                    GenericEnumConstantInsertHandler(
+                    ProjectEnumConstantInsertHandler(
                         valueStartOffset = context.valueStartOffset,
                         constant = constant,
                         wrapInQuotes = !context.insideQuotes,
@@ -174,7 +187,7 @@ class GaugeQualifiedValuePrefixMatcher(
  * Deliberately transient: it lives on the editor, holds a [SmartPsiElementPointer], and is
  * dropped as soon as a constant has been inserted.
  */
-internal object GenericEnumSelectionContext {
+internal object ProjectEnumSelectionContext {
 
     private val KEY = Key.create<Selection>("gauge.typed.parameters.genericEnumSelection")
 
@@ -215,7 +228,7 @@ internal class EnumClassInsertHandler(
                 context.commitDocument()
             }
         }
-        GenericEnumSelectionContext.remember(context.editor, psiClass)
+        ProjectEnumSelectionContext.remember(context.editor, psiClass)
     }
 }
 
@@ -227,7 +240,7 @@ internal class EnumClassInsertHandler(
  * The range is calculated explicitly from the value start recorded when completion was invoked;
  * it is idempotent with whatever the platform already replaced through the prefix matcher.
  */
-internal class GenericEnumConstantInsertHandler(
+internal class ProjectEnumConstantInsertHandler(
     private val valueStartOffset: Int,
     private val constant: String,
     private val wrapInQuotes: Boolean,
@@ -249,7 +262,7 @@ internal class GenericEnumConstantInsertHandler(
         }
         context.editor.caretModel.moveToOffset(caret)
         context.commitDocument()
-        GenericEnumSelectionContext.clear(context.editor)
+        ProjectEnumSelectionContext.clear(context.editor)
     }
 }
 

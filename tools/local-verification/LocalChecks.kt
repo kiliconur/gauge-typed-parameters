@@ -9,9 +9,9 @@ import com.company.gauge.typed.completion.GaugeValuePrefixMatcher
 import com.company.gauge.typed.enums.EnumClassCatalog
 import com.company.gauge.typed.enums.EnumClassLookup
 import com.company.gauge.typed.enums.EnumClassResolver
-import com.company.gauge.typed.enums.GenericEnumBrowser
-import com.company.gauge.typed.enums.GenericEnumCandidates
-import com.company.gauge.typed.enums.GenericEnumStage
+import com.company.gauge.typed.enums.ProjectEnumBrowser
+import com.company.gauge.typed.enums.ProjectEnumCandidates
+import com.company.gauge.typed.enums.ProjectEnumStage
 import com.company.gauge.typed.gauge.GaugeStepAdapter
 import com.company.gauge.typed.java.JavaStepParameterResolver
 import com.company.gauge.typed.model.GaugeParameterKind
@@ -154,7 +154,9 @@ private fun typeClassification() {
         JavaStepParameterResolver.kindOf(FakeClassType(FakeClass("Boolean", "java.lang.Boolean", false)))
             === GaugeParameterKind.BooleanKind,
     )
-    check("String", JavaStepParameterResolver.kindOf(FakeClassType(FakeClass("String", "java.lang.String", false))) === GaugeParameterKind.StringKind)
+    check("String opens the enum browser", JavaStepParameterResolver.kindOf(FakeClassType(FakeClass("String", "java.lang.String", false))) === GaugeParameterKind.StringEnumBrowserKind)
+    check("CharSequence too", JavaStepParameterResolver.kindOf(FakeClassType(FakeClass("CharSequence", "java.lang.CharSequence", false))) === GaugeParameterKind.StringEnumBrowserKind)
+    check("java.lang.Enum itself is no longer special", JavaStepParameterResolver.kindOf(FakeClassType(FakeClass("Enum", "java.lang.Enum", false))) === GaugeParameterKind.UnsupportedKind)
     check("unknown class is unsupported", JavaStepParameterResolver.kindOf(FakeClassType(FakeClass("Foo", "com.example.Foo", false))) === GaugeParameterKind.UnsupportedKind)
     check("unresolvable class is unsupported", JavaStepParameterResolver.kindOf(FakeClassType(null)) === GaugeParameterKind.UnsupportedKind)
 
@@ -193,7 +195,7 @@ private fun completionValues() {
     check("boolean provider ignores enums", !boolProvider.supports(enumKind))
     eq("boolean values", listOf("true", "false"), boolProvider.values(GaugeParameterKind.BooleanKind).map { it.value })
 
-    eq("string kind offers nothing", emptyList(), GaugeParameterKind.completionValues(GaugeParameterKind.StringKind))
+    eq("String kind offers no context-free values", emptyList(), GaugeParameterKind.completionValues(GaugeParameterKind.StringEnumBrowserKind))
     eq("numeric kind offers nothing", emptyList(), GaugeParameterKind.completionValues(GaugeParameterKind.NumericKind("int", true)))
 }
 
@@ -270,7 +272,10 @@ private fun validation() {
     check("3.5 is a valid double", GaugeValueValidator.validate(dbl, "3.5") == null)
     check("abc is not a double", GaugeValueValidator.validate(dbl, "abc") is Violation.InvalidNumber)
 
-    check("String is never reported", GaugeValueValidator.validate(GaugeParameterKind.StringKind, "whatever") == null)
+    check("String is never reported", GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "whatever") == null)
+    check("String stays free text: custom value", GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "custom value") == null)
+    check("String stays free text: abc123", GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "abc123") == null)
+    check("String stays free text: browsing leftovers", GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "PageItems2.") == null)
     check("Unsupported is never reported", GaugeValueValidator.validate(GaugeParameterKind.UnsupportedKind, "whatever") == null)
 
     eq("levenshtein equal", 0, GaugeValueValidator.editDistance("ABC", "ABC"))
@@ -302,20 +307,20 @@ private class CountingResolver(private val byName: Map<String, EnumClassLookup>)
 
 private fun genericEnumStages() {
     println("\n[generic Enum: stage detection]")
-    check("no dot is stage 1", GenericEnumStage.parse("Pa") is GenericEnumStage.ClassName)
-    eq("stage 1 keeps the prefix", "Pa", (GenericEnumStage.parse("Pa") as GenericEnumStage.ClassName).prefix)
-    check("empty text is stage 1", GenericEnumStage.parse("") is GenericEnumStage.ClassName)
+    check("no dot is stage 1", ProjectEnumStage.parse("Pa") is ProjectEnumStage.ClassName)
+    eq("stage 1 keeps the prefix", "Pa", (ProjectEnumStage.parse("Pa") as ProjectEnumStage.ClassName).prefix)
+    check("empty text is stage 1", ProjectEnumStage.parse("") is ProjectEnumStage.ClassName)
 
-    val afterDot = GenericEnumStage.parse("PageItems2.")
-    check("trailing dot is stage 2", afterDot is GenericEnumStage.Constant)
-    eq("stage 2 class name", "PageItems2", (afterDot as GenericEnumStage.Constant).className)
+    val afterDot = ProjectEnumStage.parse("PageItems2.")
+    check("trailing dot is stage 2", afterDot is ProjectEnumStage.Constant)
+    eq("stage 2 class name", "PageItems2", (afterDot as ProjectEnumStage.Constant).className)
     eq("stage 2 empty value prefix", "", afterDot.valuePrefix)
 
-    val withPrefix = GenericEnumStage.parse("PageItems2.LO") as GenericEnumStage.Constant
+    val withPrefix = ProjectEnumStage.parse("PageItems2.LO") as ProjectEnumStage.Constant
     eq("stage 2 class name with prefix", "PageItems2", withPrefix.className)
     eq("stage 2 value prefix", "LO", withPrefix.valuePrefix)
 
-    val qualified = GenericEnumStage.parse("com.foo.PageItems.LO") as GenericEnumStage.Constant
+    val qualified = ProjectEnumStage.parse("com.foo.PageItems.LO") as ProjectEnumStage.Constant
     eq("fully qualified class name", "com.foo.PageItems", qualified.className)
     eq("fully qualified value prefix", "LO", qualified.valuePrefix)
 }
@@ -337,17 +342,17 @@ private fun genericEnumBrowsing() {
             "PageItems2" to EnumClassLookup.Found(pageItems2),
         ),
     )
-    val browser = GenericEnumBrowser(catalog, resolver)
+    val browser = ProjectEnumBrowser(catalog, resolver)
 
     val stage1 = browser.candidatesFor(anchor, "Pa")
-    check("stage 1 offers classes", stage1 is GenericEnumCandidates.Classes)
-    eq("stage 1 lists every project enum", 3, (stage1 as GenericEnumCandidates.Classes).classes.size)
+    check("stage 1 offers classes", stage1 is ProjectEnumCandidates.Classes)
+    eq("stage 1 lists every project enum", 3, (stage1 as ProjectEnumCandidates.Classes).classes.size)
     eq("stage 1 consulted the catalogue", 1, catalog.calls)
     eq("stage 1 did not resolve a class directly", 0, resolver.calls)
 
     val stage2 = browser.candidatesFor(anchor, "PageItems2.LO")
-    check("stage 2 offers constants", stage2 is GenericEnumCandidates.Constants)
-    val constants = stage2 as GenericEnumCandidates.Constants
+    check("stage 2 offers constants", stage2 is ProjectEnumCandidates.Constants)
+    val constants = stage2 as ProjectEnumCandidates.Constants
     eq("stage 2 owner", "com.foo.web.PageItems2", constants.owner.qualifiedName)
     eq(
         "stage 2 lists only that enum's constants",
@@ -361,7 +366,7 @@ private fun genericEnumBrowsing() {
     eq("stage 2 asked for the typed name only", listOf("PageItems2"), resolver.names)
 
     val unknown = browser.candidatesFor(anchor, "Nope.LO")
-    check("unknown class offers nothing", unknown === GenericEnumCandidates.None)
+    check("unknown class offers nothing", unknown === ProjectEnumCandidates.None)
     eq("unknown class did not rebuild the catalogue", 1, catalog.calls)
 }
 
@@ -371,21 +376,21 @@ private fun genericEnumAmbiguity() {
     val mobile = FakeClass("PageItems", "com.foo.mobile.PageItems", true, listOf("LOGIN_BUTTON", "MOBILE_ONLY"))
     val anchor = FakeClass("Anchor", "com.foo.Anchor", false)
 
-    val ambiguous = GenericEnumBrowser(
+    val ambiguous = ProjectEnumBrowser(
         CountingCatalog(listOf(web, mobile)),
         CountingResolver(mapOf("PageItems" to EnumClassLookup.Ambiguous(listOf(web, mobile)))),
     )
 
     val guessed = ambiguous.candidatesFor(anchor, "PageItems.LO")
-    check("ambiguous short name offers nothing rather than the wrong enum", guessed === GenericEnumCandidates.None)
+    check("ambiguous short name offers nothing rather than the wrong enum", guessed === ProjectEnumCandidates.None)
 
     // ... unless the user picked one of them from the stage 1 list moments ago.
     val resolved = ambiguous.candidatesFor(anchor, "PageItems.LO", preferred = mobile)
-    check("the stage 1 selection breaks the tie", resolved is GenericEnumCandidates.Constants)
+    check("the stage 1 selection breaks the tie", resolved is ProjectEnumCandidates.Constants)
     eq(
         "and it is the class the user picked",
         "com.foo.mobile.PageItems",
-        (resolved as GenericEnumCandidates.Constants).owner.qualifiedName,
+        (resolved as ProjectEnumCandidates.Constants).owner.qualifiedName,
     )
 }
 

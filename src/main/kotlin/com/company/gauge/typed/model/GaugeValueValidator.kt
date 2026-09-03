@@ -43,11 +43,11 @@ object GaugeValueValidator {
         is GaugeParameterKind.SpecificEnumKind -> validateEnum(kind, value)
         GaugeParameterKind.BooleanKind -> validateBoolean(value)
         is GaugeParameterKind.NumericKind -> validateNumeric(kind, value)
-        // A `java.lang.Enum` parameter accepts a constant of ANY project enum, so there is no
-        // single legal set of values to validate against - staying silent is the only correct
-        // behaviour, and it also keeps intermediate text like "PageItems2." unmarked.
-        GaugeParameterKind.GenericEnumKind -> null
-        GaugeParameterKind.StringKind, GaugeParameterKind.UnsupportedKind -> null
+        // A String parameter is unrestricted: "anything", "custom value", "abc123" are all
+        // legal, and the enum browser offered on it is completion assistance only. It is never
+        // validated against the project's enums - not even against the class the user just
+        // browsed - so intermediate text such as "PageItems2." is never marked either.
+        GaugeParameterKind.StringEnumBrowserKind, GaugeParameterKind.UnsupportedKind -> null
     }
 
     private fun validateEnum(kind: GaugeParameterKind.SpecificEnumKind, value: String): Violation? {

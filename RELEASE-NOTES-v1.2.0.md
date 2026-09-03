@@ -1,6 +1,7 @@
-# Gauge Typed Parameters 1.1.0
+# Gauge Typed Parameters 1.2.0
 
-Two features, no changes to how the existing typed completion behaves.
+Two features on top of 1.0.0: Gauge concept file support, and a project enum browser offered on
+`String` step parameters.
 
 ## Concept file (`.cpt`) support
 
@@ -14,14 +15,14 @@ same grammar shape as the spec one) and resolves concept steps by wrapping their
 correspondence, so both languages produce one `GaugeParameterContext` and everything downstream —
 step resolution, parameter mapping, type classification, completion, inspection — is shared.
 
-## Project enum browser for `java.lang.Enum` parameters
+## Project enum browser on `String` parameters
 
-A step parameter declared as exactly `java.lang.Enum` is an intentional signal: any project enum
-constant may go there, and the implementation resolves which enum it belongs to at run time.
+Many Gauge string parameters carry an enum constant name that the step implementation converts
+itself. Completion now helps with exactly that, in two stages:
 
 ```java
 @Step("<item> menusune git")
-public void goToMenu(Enum item) { }
+public void goToMenu(String item) { }
 ```
 
 * **Stage 1** — `* "Pag|" menusune git` offers enum **class** names (`PageItems`, `PageItems2`,
@@ -32,10 +33,15 @@ public void goToMenu(Enum item) { }
 * Selecting a constant replaces the whole temporary value: the result is
   `* "LOGIN_BUTTON" menusune git`, never `"PageItems2.LOGIN_BUTTON"`.
 
+**The parameter stays completely unrestricted.** `"anything"`, `"custom value"`, `"abc123"` remain
+legal and are never flagged — not by the inspection, not by completion, and not even against the
+enum class the user just browsed. Text that matches no enum class name simply offers nothing, so
+free text is never interrupted by a popup of the whole catalogue. No annotations, no extra syntax.
+
 Behaviour that was designed in deliberately:
 
-* A parameter declared as a **concrete** enum keeps the previous, direct behaviour. Only exactly
-  `java.lang.Enum` switches to browsing mode.
+* A parameter declared as a **concrete** enum keeps the previous, direct behaviour: its own
+  constants, immediately, with validation and quick fixes as before.
 * Discovery is limited to the current module, its dependencies and project sources — no JDK,
   platform, Gauge or library enums.
 * Stage 2 resolves the typed class name directly through the Java short-name index and reads only
@@ -44,16 +50,22 @@ Behaviour that was designed in deliberately:
   typed by hand and stays ambiguous, no constants are offered rather than the wrong enum's. The
   class picked in stage 1 is remembered per editor and breaks the tie; a fully qualified name
   works too.
-* `java.lang.Enum` parameters are never flagged by the inspection.
+
+### Note on the unreleased 1.1.0
+
+1.1.0 used a parameter declared as exactly `java.lang.Enum` as the signal for this browser. That
+does not survive Gauge's own runtime parameter conversion, so the signal is now `String` and
+`java.lang.Enum` carries no special meaning at all (it classifies as unsupported, like any other
+type the plugin has nothing useful to say about). 1.1.0 was never published; 1.2.0 replaces it.
 
 ## Unchanged
 
-Specific enum completion, boolean completion, prefix matching and insertion, wrong-value
-replacement, quote handling, the inspection and its quick fixes, dumb-mode safety and step
-resolution all behave exactly as in 1.0.0, and are covered by the same tests as before.
+Specific enum completion, boolean completion, numeric recognition, prefix matching and insertion,
+wrong-value replacement, quote handling, the inspection and its quick fixes, dumb-mode safety and
+step resolution all behave exactly as in 1.0.0.
 
 ## Install
 
-Download `gauge-typed-parameters-1.1.0.zip` below, then **Settings → Plugins → gear →
+Download `gauge-typed-parameters-1.2.0.zip` below, then **Settings → Plugins → gear →
 Install Plugin from Disk…** and restart. Requires IntelliJ IDEA 2026.2.x with the official Gauge
 plugin installed.

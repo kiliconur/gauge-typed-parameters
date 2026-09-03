@@ -3,8 +3,8 @@ package com.company.gauge.typed
 import com.company.gauge.typed.enums.DirectEnumClassResolver
 import com.company.gauge.typed.enums.EnumClassCatalog
 import com.company.gauge.typed.enums.EnumClassLookup
-import com.company.gauge.typed.enums.GenericEnumBrowser
-import com.company.gauge.typed.enums.GenericEnumCandidates
+import com.company.gauge.typed.enums.ProjectEnumBrowser
+import com.company.gauge.typed.enums.ProjectEnumCandidates
 import com.company.gauge.typed.java.JavaStepParameterResolver
 import com.company.gauge.typed.model.GaugeParameterKind
 import com.intellij.codeInsight.lookup.LookupElementPresentation
@@ -12,22 +12,25 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 
 /**
- * The `java.lang.Enum` project enum browser: enum CLASS names first, that class's constants
- * after the dot, and the class name never survives in the Gauge file.
+ * The project enum browser offered on `String` parameters: enum CLASS names first, that class's
+ * constants after the dot, and the class name never survives in the Gauge file.
+ *
+ * The parameter itself stays free text - see the "unrestricted" tests at the end and
+ * [GaugeTypedParameterInspectionTest], which asserts nothing is ever flagged.
  */
-class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
+class ProjectEnumBrowserTest : GaugeTypedParametersTestCase() {
 
-    private fun addGenericEnumStep(): String = addStepImplementation(
+    private fun addStringStep(): String = addStepImplementation(
         """
             @Step("<item> menusune git")
-            public void goToMenu(Enum item) {}
+            public void goToMenu(String item) {}
         """,
     )
 
     // TEST 2 - stage 1 offers enum class names, never constants
-    fun testGenericEnumOffersProjectEnumClassNames() {
+    fun testStringParameterOffersProjectEnumClassNames() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "Pa<caret>" menusune git"""))
 
         val strings = completionStrings()
@@ -35,9 +38,9 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
         assertDoesntContain(strings, "LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON", "HOME_BUTTON")
     }
 
-    fun testGenericEnumWithEmptyValueOffersEveryProjectEnum() {
+    fun testEmptyStringValueOffersEveryProjectEnum() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "<caret>" menusune git"""))
 
         assertContainsElements(completionStrings(), "PageItems", "PageItems2", "HeaderItems")
@@ -45,7 +48,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
 
     fun testSelectingAnEnumClassInsertsOnlyItsSimpleName() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "PageItems2<caret>" menusune git"""))
 
         selectLookupItem("PageItems2")
@@ -57,7 +60,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     // TEST 3 - two enum classes with the same short name stay distinguishable in the popup
     fun testSameShortNameClassesKeepTheirPackageInThePresentation() {
         addAmbiguousEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "Scr<caret>" menusune git"""))
 
         val elements = myFixture.completeBasic()
@@ -79,7 +82,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     // TEST 4 - stage 2 offers ONLY the named class's constants
     fun testDotSwitchesToTheConstantsOfThatEnumOnly() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "PageItems2.LO<caret>" menusune git"""))
 
         val strings = completionStrings()
@@ -91,7 +94,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     // TEST 5 - the class name is only a browsing namespace and must not survive
     fun testSelectingAConstantReplacesTheWholeQualifiedValue() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "PageItems2.LO<caret>" menusune git"""))
 
         selectLookupItem("LOGIN_BUTTON")
@@ -102,7 +105,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     // TEST 6 - empty suffix
     fun testSelectingAConstantAfterABareDotReplacesTheClassName() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "PageItems2.<caret>" menusune git"""))
 
         val strings = completionStrings()
@@ -115,7 +118,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     // TEST 7 - a wrong suffix still offers everything, and replacing it is clean
     fun testWrongSuffixStillOffersTheConstantsAndReplacesThem() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "PageItems2.WRONG<caret>" menusune git"""))
 
         val strings = completionStrings()
@@ -127,7 +130,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
 
     fun testStage2MatchingIsCaseInsensitiveButInsertsTheExactConstant() {
         addProjectEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "PageItems2.log<caret>" menusune git"""))
 
         selectLookupItem("LOGIN_BUTTON")
@@ -146,13 +149,13 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
                 return emptyList()
             }
         }
-        val browser = GenericEnumBrowser(catalog, DirectEnumClassResolver.getInstance(project))
+        val browser = ProjectEnumBrowser(catalog, DirectEnumClassResolver.getInstance(project))
 
         val candidates = browser.candidatesFor(anchor, "PageItems2.LO")
 
-        assertTrue("expected constants, got $candidates", candidates is GenericEnumCandidates.Constants)
+        assertTrue("expected constants, got $candidates", candidates is ProjectEnumCandidates.Constants)
         assertContainsElements(
-            (candidates as GenericEnumCandidates.Constants).names,
+            (candidates as ProjectEnumCandidates.Constants).names,
             "LOGIN_BUTTON", "LOGOUT_BUTTON", "SETTINGS_BUTTON",
         )
         assertEquals("stage 2 must not enumerate the project's enums", 0, catalog.calls)
@@ -161,15 +164,15 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     fun testStage1DoesConsultTheProjectCatalogue() {
         addProjectEnums()
         val anchor: PsiElement = myFixture.findClass("com.example.pages.PageItems2")
-        val browser = GenericEnumBrowser(
+        val browser = ProjectEnumBrowser(
             com.company.gauge.typed.enums.ProjectEnumClassProvider.getInstance(project),
             DirectEnumClassResolver.getInstance(project),
         )
 
         val candidates = browser.candidatesFor(anchor, "Pa")
 
-        assertTrue("expected class names, got $candidates", candidates is GenericEnumCandidates.Classes)
-        val names = (candidates as GenericEnumCandidates.Classes).classes.mapNotNull { it.name }
+        assertTrue("expected class names, got $candidates", candidates is ProjectEnumCandidates.Classes)
+        val names = (candidates as ProjectEnumCandidates.Classes).classes.mapNotNull { it.name }
         assertContainsElements(names, "PageItems", "PageItems2", "HeaderItems")
     }
 
@@ -192,7 +195,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     // TEST 14 - the same short name in two packages is never guessed
     fun testAmbiguousShortNameOffersNoConstants() {
         addAmbiguousEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "Screens.<caret>" menusune git"""))
 
         val strings = completionStrings()
@@ -211,7 +214,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
 
     fun testFullyQualifiedNameResolvesTheAmbiguity() {
         addAmbiguousEnums()
-        addGenericEnumStep()
+        addStringStep()
         myFixture.configureByText("t.spec", spec("""* "com.foo.mobile.Screens.MOB<caret>" menusune git"""))
 
         val strings = completionStrings()
@@ -241,18 +244,44 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
         myFixture.checkResult(spec("""* "LOGIN_BUTTON" elementine tiklanir"""))
     }
 
-    // TEST 9 - a String parameter must not open the browser
-    fun testStringParameterDoesNotOpenTheEnumBrowser() {
+    // TEST 9 - a concrete enum parameter must NOT open the class browser
+    fun testSpecificEnumParameterDoesNotOpenTheClassBrowser() {
         addProjectEnums()
+        addElementEnum()
         addStepImplementation(
             """
-                @Step("<text> yazilir")
-                public void type(String text) {}
+                @Step("<element> elementine tiklanir")
+                public void click(Element element) {}
             """,
         )
-        myFixture.configureByText("t.spec", spec("""* "Pa<caret>" yazilir"""))
+        myFixture.configureByText("t.spec", spec("""* "Pa<caret>" elementine tiklanir"""))
 
+        // Its own constants only - never enum class names from elsewhere in the project.
         assertDoesntContain(completionStrings(), "PageItems", "PageItems2", "HeaderItems")
+    }
+
+    // The parameter is free text: text that matches no enum class name offers nothing at all,
+    // instead of popping up the whole project enum catalogue.
+    fun testFreeTextThatMatchesNoEnumClassOffersNothing() {
+        addProjectEnums()
+        addStringStep()
+        myFixture.configureByText("t.spec", spec("""* "custom valu<caret>" menusune git"""))
+
+        assertDoesntContain(
+            completionStrings(),
+            "PageItems", "PageItems2", "HeaderItems", "LOGIN_BUTTON", "HOME_BUTTON",
+        )
+    }
+
+    fun testFreeTextIsNeverRewrittenByTheBrowser() {
+        addProjectEnums()
+        addStringStep()
+        myFixture.configureByText("t.spec", spec("""* "abc123<caret>" menusune git"""))
+
+        completionStrings()
+
+        // Nothing was inserted or replaced: the value the user typed is still exactly there.
+        myFixture.checkResult(spec("""* "abc123" menusune git"""))
     }
 
     // TEST 10 - boolean parameters are untouched
@@ -272,7 +301,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     }
 
     // TEST 15 - nothing resolvable must never throw
-    fun testUnresolvedGenericEnumStepIsSilent() {
+    fun testUnresolvedStringStepIsSilent() {
         addProjectEnums()
         myFixture.configureByText("t.spec", spec("""* "PageItems2.LO<caret>" hicbir yerde yok"""))
 
@@ -285,7 +314,7 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
         addStepImplementation(
             """
                 @Step("<item> menusune git")
-                public void goToMenu(Enum item, String unexpected) {}
+                public void goToMenu(String item, String unexpected) {}
             """,
         )
         myFixture.configureByText("t.spec", spec("""* "Pa<caret>" menusune git"""))
@@ -294,13 +323,42 @@ class GenericEnumCompletionTest : GaugeTypedParametersTestCase() {
     }
 
     // Type classification, independent of completion
-    fun testRawEnumParameterIsGenericEnumKind() {
-        val fqn = addGenericEnumStep()
+    fun testStringParameterIsTheBrowserKind() {
+        val fqn = addStringStep()
         val method = myFixture.findClass(fqn).methods.first()
         assertEquals(
-            GaugeParameterKind.GenericEnumKind,
+            GaugeParameterKind.StringEnumBrowserKind,
             JavaStepParameterResolver.kindOf(method.parameterList.parameters.first()),
         )
+    }
+
+    // java.lang.Enum carries no special meaning any more - Gauge's own runtime conversion
+    // cannot handle such a parameter, so it is just another unsupported type.
+    fun testRawEnumParameterIsUnsupported() {
+        val fqn = addStepImplementation(
+            """
+                @Step("<item> menusune gider")
+                public void goToMenuRaw(Enum item) {}
+            """,
+        )
+        val method = myFixture.findClass(fqn).methods.first()
+        assertEquals(
+            GaugeParameterKind.UnsupportedKind,
+            JavaStepParameterResolver.kindOf(method.parameterList.parameters.first()),
+        )
+    }
+
+    fun testRawEnumParameterOffersNothing() {
+        addProjectEnums()
+        addStepImplementation(
+            """
+                @Step("<item> menusune gider")
+                public void goToMenuRaw(Enum item) {}
+            """,
+        )
+        myFixture.configureByText("t.spec", spec("""* "Pa<caret>" menusune gider"""))
+
+        assertDoesntContain(completionStrings(), "PageItems", "PageItems2", "HeaderItems")
     }
 
     fun testConcreteEnumParameterIsSpecificEnumKind() {

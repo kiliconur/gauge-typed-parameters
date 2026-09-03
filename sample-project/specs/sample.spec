@@ -27,11 +27,13 @@ Manual test bed. Put the caret inside a quoted parameter and press Ctrl+Space
 
 * "serbest metin" yazilir
 
-## java.lang.Enum parameter - the project enum browser
+## String parameter - the project enum browser
 
-Type Ctrl+Space inside the quotes to get enum CLASS names (PageItems, PageItems2,
-HeaderItems), pick one, type a dot, and press Ctrl+Space again to get that class's
-constants. Picking a constant replaces the whole "PageItems2.LO" text with it.
+The step below takes a plain String, so any value is legal. As assistance, Ctrl+Space
+inside the quotes offers enum CLASS names (PageItems, PageItems2, HeaderItems); pick
+one, type a dot, and press Ctrl+Space again to get that class's constants. Picking a
+constant replaces the whole "PageItems2.LO" text with it. Free text such as
+"custom value" is never flagged.
 
 * "LOGIN_BUTTON" menusune git
 

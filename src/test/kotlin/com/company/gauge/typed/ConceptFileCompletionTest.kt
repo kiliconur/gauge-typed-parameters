@@ -63,13 +63,13 @@ class ConceptFileCompletionTest : GaugeTypedParametersTestCase() {
         assertDoesntContain(strings, "CHROME", "FIREFOX")
     }
 
-    // TEST 12 - stage 1 of the java.lang.Enum browser inside a concept file
+    // TEST 12 - stage 1 of the project enum browser inside a concept file
     fun testConceptFileOffersProjectEnumClassNames() {
         addProjectEnums()
         addStepImplementation(
             """
                 @Step("<item> menusune git")
-                public void goToMenu(Enum item) {}
+                public void goToMenu(String item) {}
             """,
         )
         myFixture.configureByText("menu.cpt", concept("""* "Pa<caret>" menusune git"""))
@@ -85,7 +85,7 @@ class ConceptFileCompletionTest : GaugeTypedParametersTestCase() {
         addStepImplementation(
             """
                 @Step("<item> menusune git")
-                public void goToMenu(Enum item) {}
+                public void goToMenu(String item) {}
             """,
         )
         myFixture.configureByText("menu.cpt", concept("""* "PageItems2.LO<caret>" menusune git"""))

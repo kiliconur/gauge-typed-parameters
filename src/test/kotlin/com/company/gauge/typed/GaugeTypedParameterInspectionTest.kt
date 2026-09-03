@@ -140,14 +140,15 @@ class GaugeTypedParameterInspectionTest : GaugeTypedParametersTestCase() {
         assertEmpty(pluginProblems())
     }
 
-    // A java.lang.Enum parameter has no single legal value set - nothing may be flagged,
-    // not even the intermediate text the enum browser leaves behind while typing.
-    fun testGenericEnumParameterIsNeverHighlighted() {
+    // A String parameter is unrestricted. The project enum browser offered on it is completion
+    // assistance only, so no value may ever be flagged - not a free-text value, and not the
+    // intermediate text the browser leaves behind while the user is still typing.
+    fun testStringParameterWithTheEnumBrowserIsNeverHighlighted() {
         addProjectEnums()
         addStepImplementation(
             """
                 @Step("<item> menusune git")
-                public void goToMenu(Enum item) {}
+                public void goToMenu(String item) {}
             """,
         )
         myFixture.configureByText(
@@ -157,6 +158,8 @@ class GaugeTypedParameterInspectionTest : GaugeTypedParametersTestCase() {
                 """* "PageItems2." menusune git""",
                 """* "PageItems2.LO" menusune git""",
                 """* "SOMETHING_ELSE" menusune git""",
+                """* "custom value" menusune git""",
+                """* "abc123" menusune git""",
             ),
         )
 

@@ -53,9 +53,10 @@ Selecting `LOGIN_BUTTON` produces exactly:
   parameters in one step never leak candidates into each other.
 - **Concept file support** — the same completion and the same inspection inside `.cpt` files.
   Spec PSI and concept PSI feed one shared pipeline; there is no second engine.
-- **Project enum browser for `java.lang.Enum` parameters** — declaring a parameter as the raw
-  base class asks for enum *class* names first and that class's constants after a dot. See
-  [below](#the-javalangenum-project-enum-browser).
+- **Project enum browser on `String` parameters** — Ctrl+Space inside a string parameter offers
+  the project's enum *class* names first, and that class's constants after a dot. Pure editing
+  assistance: the value stays free text and is never validated. See
+  [below](#the-project-enum-browser-on-string-parameters).
 - **Case-insensitive prefix matching** — typing `lo`, `LO` or `Lo` all match `LOGIN_BUTTON`.
   Insertion is *not* case-adjusted: you always get the constant exactly as declared.
 - **Boolean completion** — `true` / `false` for `boolean` and `java.lang.Boolean`.
@@ -87,16 +88,21 @@ Selecting `LOGIN_BUTTON` produces exactly:
   relative order, so Gauge wins in practice. Completion *inside* quotes — the primary feature — is
   unaffected by this.
 
-### The `java.lang.Enum` project enum browser
+### The project enum browser on `String` parameters
 
-Sometimes a step accepts a constant of *any* project enum and the implementation resolves the
-enum itself at run time. Declaring the parameter as the raw base class is the signal for that:
+Plenty of Gauge string parameters carry an enum constant name that the step implementation
+converts itself. Typing that constant from memory is the tedious part, so a `String` parameter
+gets a two-stage browser over the project's enums:
 
 ```java
 @Step("<item> menusune git")
-public void goToMenu(Enum item) {
+public void goToMenu(String item) {
 }
 ```
+
+**The parameter stays free text.** `"anything"`, `"custom value"`, `"abc123"` are all perfectly
+legal, nothing is ever flagged, and no annotation or extra syntax is involved. This is completion
+assistance and nothing else; text that matches no enum class name simply offers nothing.
 
 **Stage 1 — enum class names.** With the caret inside the quotes:
 
@@ -133,7 +139,10 @@ The class name is a browsing namespace inside the IDE only; it never stays in th
 Details worth knowing:
 
 - A parameter typed as a **concrete** enum (`PageItems item`) keeps the direct behaviour —
-  constants immediately, no class-browsing step. Only exactly `java.lang.Enum` switches modes.
+  constants immediately, no class-browsing step.
+- `String` values are never validated against the project's enums, not even against the class
+  just browsed. The inspection stays silent on them, including on half-typed text like
+  `PageItems2.`.
 - Only enums from the current module, its dependencies and the project's own sources are listed.
   JDK, IntelliJ platform, Gauge and third-party library enums are never offered.
 - Stage 2 resolves the named class directly through the Java short-name index and reads only that
@@ -143,14 +152,12 @@ Details worth knowing:
   separately with their packages. If such a name is typed by hand and stays ambiguous, **no**
   constants are offered rather than the wrong enum's; picking the class from the list first, or
   typing the fully qualified name (`com.foo.mobile.Screens.`), resolves it.
-- A `java.lang.Enum` parameter is never flagged by the inspection: there is no single legal value
-  set to validate against, and intermediate text such as `PageItems2.` must not light up red.
 
 ## Installation
 
 ### Option 1 — use the prebuilt ZIP
 
-1. Download [`release/gauge-typed-parameters-1.1.0.zip`](release/gauge-typed-parameters-1.1.0.zip)
+1. Download [`release/gauge-typed-parameters-1.2.0.zip`](release/gauge-typed-parameters-1.2.0.zip)
 2. In IntelliJ IDEA: **Settings → Plugins → gear icon → Install Plugin from Disk…**
 3. Select the ZIP
 4. Restart IntelliJ IDEA
@@ -207,7 +214,7 @@ gradlew.bat clean test buildPlugin
 Result:
 
 ```
-build/distributions/gauge-typed-parameters-1.1.0.zip
+build/distributions/gauge-typed-parameters-1.2.0.zip
 ```
 
 ### Toolchain
@@ -247,7 +254,7 @@ caret inside a Gauge parameter (.spec or .cpt)
   → PsiMethod
   → PsiParameter                 the parameter at that index
   → PsiType
-  → specific enum / java.lang.Enum / boolean / numeric / string / unsupported
+  → specific enum / String (enum browser) / boolean / numeric / unsupported
 ```
 
 `.spec` and `.cpt` differ only in the first two lines of that pipeline. Gauge models concepts with

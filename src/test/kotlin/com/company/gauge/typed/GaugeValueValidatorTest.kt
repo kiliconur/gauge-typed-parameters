@@ -55,7 +55,11 @@ class GaugeValueValidatorTest {
 
     @Test
     fun `string and unsupported kinds are never reported`() {
-        assertNull(GaugeValueValidator.validate(GaugeParameterKind.StringKind, "anything at all"))
+        assertNull(GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "anything at all"))
+        assertNull(GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "custom value"))
+        assertNull(GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "abc123"))
+        // Text left behind mid-browsing is still just text.
+        assertNull(GaugeValueValidator.validate(GaugeParameterKind.StringEnumBrowserKind, "PageItems2."))
         assertNull(GaugeValueValidator.validate(GaugeParameterKind.UnsupportedKind, "anything at all"))
     }
 

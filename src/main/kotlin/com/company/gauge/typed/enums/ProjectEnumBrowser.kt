@@ -5,22 +5,22 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 
 /**
- * What the user has typed inside a `java.lang.Enum` parameter decides which of the two stages
+ * What the user has typed inside the parameter decides which of the two browser stages
  * of the project enum browser applies.
  *
  * `"Pag"`             -> [ClassName]  (stage 1: offer enum class names)
  * `"PageItems2."`     -> [Constant]   (stage 2: offer only that class's constants)
  * `"PageItems2.LO"`   -> [Constant]
  */
-sealed interface GenericEnumStage {
+sealed interface ProjectEnumStage {
 
-    data class ClassName(val prefix: String) : GenericEnumStage
+    data class ClassName(val prefix: String) : ProjectEnumStage
 
-    data class Constant(val className: String, val valuePrefix: String) : GenericEnumStage
+    data class Constant(val className: String, val valuePrefix: String) : ProjectEnumStage
 
     companion object {
         /** Splits at the LAST dot, so a fully qualified `com.foo.PageItems.LO` also works. */
-        fun parse(typedText: String): GenericEnumStage {
+        fun parse(typedText: String): ProjectEnumStage {
             val dot = typedText.lastIndexOf('.')
             if (dot < 0) return ClassName(typedText)
             return Constant(
@@ -50,20 +50,20 @@ sealed interface EnumClassLookup {
     data object NotFound : EnumClassLookup
 }
 
-/** What completion should offer for a `java.lang.Enum` parameter. */
-sealed interface GenericEnumCandidates {
+/** What the browser should offer for the text typed so far. */
+sealed interface ProjectEnumCandidates {
     /** Stage 1 - enum class names. */
-    data class Classes(val classes: List<PsiClass>, val prefix: String) : GenericEnumCandidates
+    data class Classes(val classes: List<PsiClass>, val prefix: String) : ProjectEnumCandidates
 
     /** Stage 2 - the constants of exactly one enum class. */
     data class Constants(
         val owner: PsiClass,
         val names: List<String>,
         val valuePrefix: String,
-    ) : GenericEnumCandidates
+    ) : ProjectEnumCandidates
 
     /** Nothing safe to offer (unknown class name, ambiguous class, nothing indexed yet). */
-    data object None : GenericEnumCandidates
+    data object None : ProjectEnumCandidates
 }
 
 /**
@@ -71,7 +71,7 @@ sealed interface GenericEnumCandidates {
  * search: [catalog] and [resolver] are injected, which is what makes "stage 2 never triggers a
  * full project enum scan" a property a test can assert.
  */
-class GenericEnumBrowser(
+class ProjectEnumBrowser(
     private val catalog: EnumClassCatalog,
     private val resolver: EnumClassResolver,
 ) {
@@ -87,23 +87,23 @@ class GenericEnumBrowser(
         anchor: PsiElement,
         typedText: String,
         preferred: PsiClass? = null,
-    ): GenericEnumCandidates = when (val stage = GenericEnumStage.parse(typedText)) {
-        is GenericEnumStage.ClassName -> classCandidates(anchor, stage.prefix)
-        is GenericEnumStage.Constant -> constantCandidates(anchor, stage, preferred)
+    ): ProjectEnumCandidates = when (val stage = ProjectEnumStage.parse(typedText)) {
+        is ProjectEnumStage.ClassName -> classCandidates(anchor, stage.prefix)
+        is ProjectEnumStage.Constant -> constantCandidates(anchor, stage, preferred)
     }
 
-    private fun classCandidates(anchor: PsiElement, prefix: String): GenericEnumCandidates {
+    private fun classCandidates(anchor: PsiElement, prefix: String): ProjectEnumCandidates {
         val classes = catalog.enumClasses(anchor)
         GtpLog.info("Stage1 enum classes found=${classes.size}")
-        if (classes.isEmpty()) return GenericEnumCandidates.None
-        return GenericEnumCandidates.Classes(classes, prefix)
+        if (classes.isEmpty()) return ProjectEnumCandidates.None
+        return ProjectEnumCandidates.Classes(classes, prefix)
     }
 
     private fun constantCandidates(
         anchor: PsiElement,
-        stage: GenericEnumStage.Constant,
+        stage: ProjectEnumStage.Constant,
         preferred: PsiClass?,
-    ): GenericEnumCandidates {
+    ): ProjectEnumCandidates {
         val shortName = stage.className.substringAfterLast('.')
         GtpLog.info("Stage2 resolving class shortName=$shortName")
 
@@ -126,20 +126,20 @@ class GenericEnumBrowser(
                         lookup.classes.mapNotNull { it.qualifiedName } +
                         " - no constants offered, pick the class from the list again",
                 )
-                GenericEnumCandidates.None
+                ProjectEnumCandidates.None
             }
 
             EnumClassLookup.NotFound -> {
                 GtpLog.info("Stage2 class NOT found: $shortName")
-                GenericEnumCandidates.None
+                ProjectEnumCandidates.None
             }
         }
     }
 
-    private fun constantsOf(psiClass: PsiClass, valuePrefix: String): GenericEnumCandidates {
+    private fun constantsOf(psiClass: PsiClass, valuePrefix: String): ProjectEnumCandidates {
         val names = EnumConstants.of(psiClass)
         GtpLog.info("Stage2 constants=$names")
-        if (names.isEmpty()) return GenericEnumCandidates.None
-        return GenericEnumCandidates.Constants(psiClass, names, valuePrefix)
+        if (names.isEmpty()) return ProjectEnumCandidates.None
+        return ProjectEnumCandidates.Constants(psiClass, names, valuePrefix)
     }
 }
